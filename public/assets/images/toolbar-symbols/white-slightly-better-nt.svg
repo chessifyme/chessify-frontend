@@ -1,0 +1,13 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 13" width="10" height="13">
+	<title>white-slightly-better-svg</title>
+	<style>
+		.s0 { fill: none } 
+		.s1 { fill: #358c65 } 
+		.s2 { fill: none;stroke: #358c65;stroke-linecap: round;stroke-width: 1.1 } 
+	</style>
+	<path id="Layer" class="s0" d="m-7-5.9h24v24h-24z"/>
+	<path id="Layer" class="s1" d="m2.5 4.7c-0.3 0-0.6-0.3-0.6-0.6 0-0.3 0.3-0.5 0.6-0.5zm5-1.1c0.3 0 0.6 0.2 0.6 0.5 0 0.3-0.3 0.6-0.6 0.6zm-5 0h5v1.1h-5z"/>
+	<path id="Layer" class="s2" d="m5 1.6v5"/>
+	<path id="Layer" class="s1" d="m2.5 9.6c-0.3 0-0.6-0.2-0.6-0.5 0-0.3 0.3-0.6 0.6-0.6zm5-1.1c0.3 0 0.6 0.3 0.6 0.6 0 0.3-0.3 0.5-0.6 0.5zm-5 0h5v1.1h-5z"/>
+	<path id="Layer" class="s1" d="m2.5 11.5c-0.3 0-0.6-0.2-0.6-0.5 0-0.3 0.3-0.6 0.6-0.6zm5-1.1c0.3 0 0.6 0.3 0.6 0.6 0 0.3-0.3 0.5-0.6 0.5zm-5 0h5v1.1h-5z"/>
+</svg>
