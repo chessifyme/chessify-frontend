@@ -24,20 +24,70 @@ export async function getVideos(token, fen) {
   return videos.video;
 }
 
-export async function getUserFullData() {
-  const url = '/user_account/user_full_info';
-  const response = await fetch(url, {
-    method: 'GET',
-  });
-  const responseJson = await response.json();
-  if (responseJson.error === true) {
-    window.location.replace('/auth/signin');
-  }
-  if (!response.ok) {
+export async function getUserServersData() {
+  try {
+    const url = '/user_account/user_servers_info';
+    const response = await fetch(url, {
+      method: 'GET',
+    });
+    if (!response.ok) {
+      throw new Error('Something went wrong');
+    }
+    const responseJson = await response.json();
+    return responseJson;
+  } catch (error) {
     throw new Error('Something went wrong');
   }
+}
 
-  return responseJson;
+export async function getUserNotifiactionData() {
+  try {
+    const url = '/user_account/user_notifications_info';
+    const response = await fetch(url, {
+      method: 'GET',
+    });
+    if (!response.ok) {
+      throw new Error('Something went wrong');
+    }
+    const responseJson = await response.json();
+    return responseJson;
+  } catch (error) {
+    console.error('Error Notifiaction:', error);
+  }
+}
+
+export async function getUserAccountData() {
+  try {
+    const url = '/user_account/user_account_info';
+    const response = await fetch(url, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      throw new Error('Something went wrong');
+    }
+    const responseJson = await response.json();
+
+    return responseJson;
+  } catch (error) {
+    throw new Error('Something went wrong');
+  }
+}
+
+export async function getUserPlansData() {
+  try {
+    const url = '/user_account/user_plans_info';
+    const response = await fetch(url, {
+      method: 'GET',
+    });
+    if (!response.ok) {
+      throw new Error('Something went wrong');
+    }
+    const responseJson = await response.json();
+    return responseJson;
+  } catch (error) {
+    throw new Error('Something went wrong');
+  }
 }
 
 export async function getAvailableServers() {
@@ -130,12 +180,13 @@ export const logout = () => {
     },
   }).then(() => {
     clearSavedAnalyzeInfoFromSessionStorage();
+    localStorage.removeItem('logged_out');
     window.location.href = '/auth/signin';
   });
 };
 
-export const changePassword = async (data, id, token) => {
-  const response = await fetch(`/user_account/change_password/${id}/`, {
+export const changePassword = async (data, token) => {
+  const response = await fetch(`/user_account/change_password/`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -147,8 +198,8 @@ export const changePassword = async (data, id, token) => {
   return await response.json();
 };
 
-export const updateUser = (data, id, token) => {
-  return fetch(`/user_account/update_profile/${id}/`, {
+export const updateUser = async (data, token) => {
+  const response = await fetch(`/user_account/update_profile/`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -156,6 +207,8 @@ export const updateUser = (data, id, token) => {
     },
     body: JSON.stringify(data),
   });
+
+  return await response.json();
 };
 
 export const manageSubscription = async () => {
@@ -170,18 +223,6 @@ export const manageSubscription = async () => {
     }
   });
 };
-
-export async function getUserAccountInfo() {
-  const url = '/user_account/user_info';
-  const response = await fetch(url, {
-    method: 'GET',
-  });
-  if (!response.ok) {
-    throw new Error('Something went wrong');
-  }
-
-  return await response.json();
-}
 
 export async function searchPlayers(playerName) {
   const url = `${CLOUD_URL}/dbsearch/find_player`;
@@ -230,10 +271,20 @@ export async function getFiles(id, filePath, token) {
   return result.data;
 }
 
-export async function setColorMode(token, id, modeData) {
-  const data = { is_dark: modeData };
-
-  fetch(`/user_account/set_dark_mode/${id}/`, {
+export async function setDashboardSettings(
+  token,
+  modeData,
+  arrowsData,
+  boardData,
+  piecesData
+) {
+  const data = {
+    is_dark: modeData,
+    arrows_enabled: arrowsData,
+    board_theme: boardData,
+    pieces_theme: piecesData,
+  };
+  return fetch(`/user_account/update_dashboard_settings/`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -292,8 +343,9 @@ export async function updatePgnTags(id, name, header, token) {
   return await response.json();
 }
 
-export async function getPgnTags(pgnID, token) {
-  const url = `${CLOUD_URL}/user_account/get-pgn-tags?id=${pgnID}`;
+export async function getPgnTags(pgnIDs, token) {
+  const urlParams = 'ids=' + pgnIDs.join('&ids=');
+  const url = `${CLOUD_URL}/user_account/get-pgn-tags?${urlParams}`;
   const response = await fetch(url, {
     method: 'GET',
     headers: {
@@ -343,9 +395,152 @@ export async function addOnboadingData(onboardingData) {
   }
 }
 
+export async function getLichessDB(fen, searchParamsLichess) {
+  let searchParams = '';
+  for (const param in searchParamsLichess) {
+    if (param === 'speeds' || param === 'ratings') {
+      let paramsSep = searchParamsLichess[param].join(',');
+      searchParams += `&${param}=${paramsSep}`;
+    } else if (
+      searchParamsLichess[param] &&
+      (typeof searchParamsLichess[param] !== 'string' ||
+        searchParamsLichess[param].length)
+    ) {
+      searchParams += `&${param}=${searchParamsLichess[param]}`;
+    }
+  }
+  const url = `https://explorer.lichess.ovh/lichess?fen=${fen}${searchParams}`;
+  const response = await fetch(url, {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error('Something went wrong');
+  }
+
+  return await response.json();
+}
+
+export async function getLichessDBPlayer(
+  fen,
+  searchParamsLichessPlayer,
+  setIsLoading
+) {
+  let searchParams = '';
+  for (const param in searchParamsLichessPlayer) {
+    if (param === 'speeds' || param === 'modes') {
+      let paramsSep = searchParamsLichessPlayer[param].join(',');
+      searchParams += `&${param}=${paramsSep}`;
+    } else if (
+      searchParamsLichessPlayer[param] &&
+      (searchParamsLichessPlayer[param] !== 'string' ||
+        searchParamsLichessPlayer[param].length)
+    ) {
+      searchParams += `&${param}=${searchParamsLichessPlayer[param]}`;
+    }
+  }
+  const url = `https://explorer.lichess.ovh/player?fen=${fen}${searchParams}`;
+  const response = await fetch(url, {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  let result = '';
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let receivedLength = 0;
+  while (true) {
+    const obj = await reader.read();
+    const { done, value } = obj;
+
+    if (done) {
+      setIsLoading(null);
+      break;
+    }
+    receivedLength += value.length;
+    setIsLoading(`${(receivedLength / 1024).toFixed(2)} KB`);
+    result = decoder.decode(value, { stream: true });
+  }
+  console.log('RESULT BEFORE PARSE', result);
+  let jsonData = {};
+  try {
+    jsonData = JSON.parse(result);
+  } catch (e) {
+    console.error('Error parsing JSON:', result);
+    jsonData = JSON.parse(result);
+  }
+  return jsonData;
+}
+
+export async function openLichessGame(id) {
+  const url = `https://lichess.org/game/export/${id}?clocks=false`;
+  const response = await fetch(url, {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error('Something went wrong');
+  }
+
+  return await response.text();
+}
+
+export async function getChessAIResponse(fen, pgn, token) {
+  const url = `${CLOUD_URL}/entertainment/get_chatgpt_analysis/`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    body: JSON.stringify({
+      pgn: pgn,
+      fen: fen,
+    }),
+  });
+
+  if (!response.ok) {
+    console.error('ERROR IN CHESS AI RESPONSE');
+    return null;
+  }
+
+  return await response.json();
+}
+
+export async function sendChessAIReview(
+  fen,
+  pgnStr,
+  gptResponse,
+  rate,
+  feedback,
+  token
+) {
+  const url = `${CLOUD_URL}/entertainment/gpt_analysis_feedback`;
+
+  const request_body = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Token ${token}`,
+    },
+    body: JSON.stringify({
+      fen: fen,
+      pgn: pgnStr,
+      gpt_response: gptResponse,
+      rate: rate,
+      feedback: feedback,
+    }),
+  };
+
+  const response = await fetch(url, request_body);
+
+  if (!response.ok) {
+    throw new Error('Something went wrong');
+  }
+}
+
 export default {
   getVideos,
-  getUserFullData,
   getAvailableServers,
   orderServer,
   stopServer,
@@ -357,8 +552,13 @@ export default {
   updateUser,
   manageSubscription,
   getFiles,
-  setColorMode,
   getPgnTags,
   handleSubscribeDecodeChss,
   addOnboadingData,
+  getUserServersData,
+  getUserAccountData,
+  getUserPlansData,
+  getUserNotifiactionData,
+  getLichessDB,
+  getLichessDBPlayer,
 };

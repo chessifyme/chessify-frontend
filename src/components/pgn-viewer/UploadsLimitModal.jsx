@@ -8,7 +8,7 @@ import { setSubModal } from '../../actions/cloud';
 const mapStateToProps = (state) => {
   return {
     uploadLimitExceeded: state.board.uploadLimitExceeded,
-    userFullInfo: state.cloud.userFullInfo,
+    plans: state.cloud.plans,
   };
 };
 
@@ -29,18 +29,19 @@ const UploadsLimitModal = ({
   setUploadLimitExceeded,
   setLoader,
   limitType,
-  userFullInfo,
+  plans,
   setSubModal,
 }) => {
   const [products, setProducts] = useState([]);
-  const isFreeOrAmature =
-    userFullInfo.subscription &&
-    (userFullInfo.subscription.product_id === 14 ||
-      userFullInfo.subscription.product_id === 15 ||
-      userFullInfo.subscription.product_id === 16);
+  const isFreeOrAmateur =
+    plans &&
+    plans.subscription &&
+    (plans.subscription.product_id === 14 ||
+      plans.subscription.product_id === 15 ||
+      plans.subscription.product_id === 16);
 
-  const message = isFreeOrAmature
-    ? MESSAGES[limitType].replace('Amature', 'Master')
+  const message = isFreeOrAmateur
+    ? MESSAGES[limitType].replace('Amateur', 'Master')
     : MESSAGES[limitType];
 
   async function getProducts() {
@@ -52,15 +53,17 @@ const UploadsLimitModal = ({
     const { result } = await response.json();
 
     let suggestedProduct = result.filter((product) => product.id === 15);
-    if (isFreeOrAmature) {
+    if (isFreeOrAmateur) {
       suggestedProduct = result.filter((product) => product.id === 17);
     }
     setProducts(suggestedProduct);
   }
 
   useEffect(() => {
-    getProducts();
-  }, []);
+    if (plans && Object.keys(plans).length) {
+      getProducts();
+    }
+  }, [plans]);
 
   const handleCloseModal = () => {
     setShowModal(false);
@@ -71,7 +74,7 @@ const UploadsLimitModal = ({
     }
   };
 
-  return (
+  return products.length ? (
     <Modal
       show={showModal}
       size="md"
@@ -121,7 +124,7 @@ const UploadsLimitModal = ({
         </div>
       </Modal.Body>
     </Modal>
-  );
+  ) : null;
 };
 
 export default connect(mapStateToProps, {

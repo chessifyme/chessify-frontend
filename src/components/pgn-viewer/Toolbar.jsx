@@ -10,6 +10,7 @@ import {
   deleteMoveComment,
   deleteMoveNag,
   addCommentToMove,
+  setActiveMove,
 } from '../../actions/board';
 import SavePgnUploadModal from './SavePgnUploadModal';
 import { setUserUploads } from '../../actions/board';
@@ -17,6 +18,7 @@ import {
   checkIsBlackMove,
   generateNewFolderName,
 } from '../../../src/utils/pgn-viewer';
+import { findNextActiveMove, findFenMatches } from '../../utils/chess-utils';
 
 const tools = [
   {
@@ -72,6 +74,28 @@ const tools = [
     title: 'White is Better',
   },
   {
+    nag: '$14',
+    symbol: require('../../../public/assets/images/toolbar-symbols/white-slightly-better.svg'),
+    title: 'White is slightly better',
+    size: 27,
+  },
+  {
+    nag: '$19',
+    symbol: require('../../../public/assets/images/toolbar-symbols/black-winning.svg'),
+    title: 'Black is Winning',
+  },
+  {
+    nag: '$17',
+    symbol: require('../../../public/assets/images/toolbar-symbols/black-better.svg'),
+    title: 'Black is Better',
+  },
+  {
+    nag: '$15',
+    symbol: require('../../../public/assets/images/toolbar-symbols/black-slightly-better.svg'),
+    title: 'Black is slightly better',
+    size: 27,
+  },
+  {
     nag: '$11',
     symbol: require('../../../public/assets/images/toolbar-symbols/even.svg'),
     title: 'Even',
@@ -80,28 +104,6 @@ const tools = [
     nag: '$13',
     symbol: require('../../../public/assets/images/toolbar-symbols/unclear.svg'),
     title: 'Unclear',
-  },
-  {
-    nag: '$17',
-    symbol: require('../../../public/assets/images/toolbar-symbols/black-better.svg'),
-    title: 'Black is Better',
-  },
-  {
-    nag: '$19',
-    symbol: require('../../../public/assets/images/toolbar-symbols/black-winning.svg'),
-    title: 'Black is Winning',
-  },
-  {
-    nag: '$14',
-    symbol: require('../../../public/assets/images/toolbar-symbols/white-slightly-better.svg'),
-    title: 'White is slightly better',
-    size: 27,
-  },
-  {
-    nag: '$15',
-    symbol: require('../../../public/assets/images/toolbar-symbols/black-slightly-better.svg'),
-    title: 'Black is slightly better',
-    size: 27,
   },
   {
     nag: '$132',
@@ -113,18 +115,33 @@ const tools = [
     symbol: require('../../../public/assets/images/toolbar-symbols/compensation.svg'),
     title: 'Compensation',
   },
+  {
+    nag: '$40',
+    symbol: require('../../../public/assets/images/toolbar-symbols/attack.svg'),
+    title: 'With attack',
+  },
+  {
+    nag: '$36',
+    symbol: require('../../../public/assets/images/toolbar-symbols/initiative.svg'),
+    title: 'Initiative',
+  },
 ];
 
 const mapStateToProps = (state) => {
   return {
     activeMove: state.board.activeMove,
     userUploads: state.board.userUploads,
-    userFullInfo: state.cloud.userFullInfo,
+    userInfo: state.cloud.userInfo,
+    isGuestUser: state.cloud.isGuestUser,
+    pgn: state.board.pgn,
+    fen: state.board.fen,
   };
 };
 
 const Toolbar = (props) => {
   const {
+    pgn,
+    fen,
     activeMove,
     deleteVarsAndComments,
     deleteRemainingMoves,
@@ -134,28 +151,36 @@ const Toolbar = (props) => {
     isCommentField,
     setCommentField,
     addCommentToMove,
-    userFullInfo,
+    userInfo,
     userUploads,
     setUserUploads,
+    setActiveMove,
+    isGuestUser,
+    setLoginModal,
   } = props;
 
   const [commentText, setCommentText] = useState('');
   const [uploadPgnModal, setUploadPgnModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [matchedFens, setMatchedFens] = useState([]);
 
   useEffect(() => {
     setCommentText(commentText);
   }, [commentText]);
 
   const uploadPgnCloudHandler = () => {
+    if (isGuestUser) {
+      setLoginModal(true);
+      return;
+    }
     if (
       userUploads &&
       Object.keys(userUploads).length === 0 &&
       !userUploads.hasOwnProperty('noExistingFilesErrorMessage')
     ) {
       setIsLoading(true);
-      setUserUploads('/', userFullInfo).then(({ payload }) => {
+      setUserUploads('/', userInfo).then(({ payload }) => {
         setUploadPgnModal(true);
         setIsLoading(false);
         setNewFolderName(
@@ -169,11 +194,78 @@ const Toolbar = (props) => {
   };
 
   const addNagsHandler = (activeMove, nag) => {
-    if (nag === '$22') {
-      nag = checkIsBlackMove(activeMove) ? '$23' : nag;
+    const blackPairs = {
+      $22: '$23',
+      $36: '$37',
+      $40: '$41',
+    };
+    if (Object.keys(blackPairs).includes(nag)) {
+      nag = checkIsBlackMove(activeMove) ? blackPairs[nag] : nag;
     }
     addNags(activeMove, nag);
   };
+
+  const findNextFenHandler = () => {
+    let allMatchedFens = matchedFens;
+    let foundMatch = false;
+    if (matchedFens.length && activeMove && activeMove.move_id) {
+      foundMatch = matchedFens.find(
+        (match) => match.move && match.move.move_id === activeMove.move_id
+      );
+      if (foundMatch && matchedFens.length === 1) {
+        return;
+      }
+    }
+
+    if (!foundMatch && (!activeMove || !activeMove.move_id)) {
+      allMatchedFens = findFenMatches(fen, pgn);
+      setMatchedFens(allMatchedFens);
+
+      if (allMatchedFens.length === 1) return;
+      let nextActiveMove = {};
+      allMatchedFens.forEach((match) => {
+        if (match.move && match.move.layer !== 0 && !nextActiveMove.move) {
+          nextActiveMove = match.move;
+        }
+      });
+      if (nextActiveMove.move_id) setActiveMove(nextActiveMove);
+      return;
+    }
+
+    if (!foundMatch || !allMatchedFens.length) {
+      allMatchedFens = findFenMatches(fen, pgn);
+      setMatchedFens(allMatchedFens);
+
+      if (allMatchedFens.length === 1) return;
+    }
+    const nextActiveMove = findNextActiveMove(activeMove, allMatchedFens, pgn);
+
+    setActiveMove(nextActiveMove);
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.ctrlKey && e.key === 'F7') {
+        findNextFenHandler();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [activeMove]);
+
+  useEffect(() => {
+    if (matchedFens.length && activeMove && activeMove.move_id) {
+      let foundMatch = matchedFens.find(
+        (match) => match.move && match.move.move_id === activeMove.move_id
+      );
+      if (!foundMatch) {
+        setMatchedFens([]);
+      }
+    }
+  }, [activeMove]);
 
   return (
     <div className="toolbar">
@@ -187,7 +279,7 @@ const Toolbar = (props) => {
             }}
           >
             <img
-              height={30}
+              height={16}
               src={require('../../../public/assets/images/toolbar-symbols/promote.svg')}
               alt="Promote"
             />
@@ -200,7 +292,7 @@ const Toolbar = (props) => {
             }}
           >
             <img
-              height={30}
+              height={28}
               src={require('../../../public/assets/images/toolbar-symbols/delete-variation.svg')}
               alt="Delete Var"
             />
@@ -213,7 +305,7 @@ const Toolbar = (props) => {
             }}
           >
             <img
-              height={30}
+              height={28}
               src={require('../../../public/assets/images/toolbar-symbols/delete-remaining-moves.svg')}
               alt="Delete Remaining"
             />
@@ -229,8 +321,8 @@ const Toolbar = (props) => {
                 }}
               >
                 <img
-                  height={tool.size ? tool.size : 30}
-                  width={tool.size ? tool.size : 30}
+                  height={tool.size ? tool.size : 28}
+                  width={tool.size ? tool.size : 28}
                   src={tool.symbol}
                   alt={tool.nag}
                 />
@@ -245,9 +337,22 @@ const Toolbar = (props) => {
             }}
           >
             <img
-              height={30}
+              height={28}
               src={require('../../../public/assets/images/toolbar-symbols/delete-variations-comments.svg')}
               alt="Del"
+            />
+          </button>
+          <button
+            title="Merge Transposition (Ctrl + F7)"
+            className="toolbar-item transposition"
+            onClick={() => {
+              findNextFenHandler();
+            }}
+          >
+            <img
+              height={17}
+              src={require('../../../public/assets/images/toolbar-symbols/transposition.svg')}
+              alt="Transposition"
             />
           </button>
         </div>
@@ -268,11 +373,11 @@ const Toolbar = (props) => {
           </button>
         </div>
       </div>
-      {isCommentField && activeMove.move ? (
+      {isCommentField && activeMove && activeMove.move ? (
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            addCommentToMove(activeMove, commentText);
+            addCommentToMove(activeMove, commentText, null);
             setCommentField(false);
             setCommentText('');
           }}
@@ -322,4 +427,5 @@ export default connect(mapStateToProps, {
   promoteVariation,
   addCommentToMove,
   setUserUploads,
+  setActiveMove,
 })(Toolbar);

@@ -1,5 +1,8 @@
 import Chess from 'chess.js';
 import { setPgnHeader, convertResultBack } from './pgn-viewer';
+import { INITIAL_FEN } from '../constants/board-params';
+import { findRootVariations } from './pgn-viewer';
+import { findIndexedPath } from './pgn-viewer';
 
 const chess = new Chess();
 
@@ -19,8 +22,8 @@ export function addMoveNumbersToSans(fullFen, moves) {
         i === 0 && !whitesMove
           ? `${moveNumber}...`
           : whitesMove
-          ? `${moveNumber}.`
-          : '',
+            ? `${moveNumber}.`
+            : '',
       move: mv[0],
     };
 
@@ -39,21 +42,20 @@ export function parseProAnalysis(data, fen) {
   const bestMoveIndex = splitedStringAnalysisData.findIndex(
     (str) => str === 'bestmove'
   );
+
   if (bestMoveIndex !== -1) return { stopped: true };
 
   const pvIndex = splitedStringAnalysisData.findIndex((str) => str === 'pv');
-  if (pvIndex === -1) return null; // Moves don't exist in data
+
+  if (pvIndex === -1) return null;
+  // Moves don't exist in data
 
   // Get list of moves from Stockfish, parse it to sans with Chess.js and put each move in array to make it like Free Analysis data.
   const movesList = splitedStringAnalysisData.slice(pvIndex + 1);
 
   let stopped = false;
   let legal = null;
-  let chessFen = chess.load(fen);
-  if (!chessFen) {
-    let fixedNewFen = fen.slice(0, -1) + '1';
-    chess.load(fixedNewFen);
-  }
+  chess.load(fen);
   movesList.forEach((move) => {
     if (move !== '\n') {
       legal = chess.move(move, { sloppy: true });
@@ -72,6 +74,7 @@ export function parseProAnalysis(data, fen) {
   // Which row of analysis to update
   const multiPvNumberIndex =
     splitedStringAnalysisData.findIndex((str) => str === 'multipv') + 1;
+
   const rowId = multiPvNumberIndex
     ? parseInt(splitedStringAnalysisData[multiPvNumberIndex]) - 1
     : 0;
@@ -102,6 +105,7 @@ export function parseProAnalysis(data, fen) {
   let score = whitesMove
     ? `${parseInt(splitedStringAnalysisData[scoreIndex]) / 100}`
     : `${-parseInt(splitedStringAnalysisData[scoreIndex]) / 100}`;
+
   if (!scoreIndex) {
     scoreIndex =
       splitedStringAnalysisData.findIndex((str) => str === 'mate') + 1;
@@ -119,21 +123,53 @@ export function parseProAnalysis(data, fen) {
       pgn,
       nodes,
       tbhits,
+      arrowShape: movesList.length > 0 ? movesList[0] : '',
     },
   };
 }
 
 export const settingHeader = (pgnStr) => {
-  chess.load_pgn(pgnStr, { sloppy: true });
-  let header = setPgnHeader(chess.header());
-  header += pgnStr.startsWith('[SetUp') ? '' : '\n';
-  return header + pgnStr;
-};
+  if (!pgnStr.length || pgnStr === ' *') {
+    return `[SetUp "1"]\n[FEN "${INITIAL_FEN}"]\n\n*`;
+  };
+
+  const headers =
+    `[Event ""]
+[EventDate ""]
+[Site ""]
+[Date ""]
+[Round ""]
+[White ""]
+[Black ""]
+[Result ""]
+[WhiteElo ""]
+[WhiteTitle ""]
+[BlackElo ""]
+[BlackTitle ""]
+[TimeControl ""]
+[UTCDate ""]
+[UTCTime ""]
+[Variant ""]
+[ECO ""]
+[Opening ""]
+[Annotator ""]
+[PlyCount ""]
+[SourceTitle ""]
+[WhiteTeam ""]
+[BlackTeam ""]
+[SetUp ""]
+
+`
+  return headers + pgnStr;
+}
 
 export function downloadPGN(text) {
   chess.load_pgn(text, { sloppy: true });
   let header = setPgnHeader(chess.header());
-  text = header + (header.length ? '\n' : '') + text;
+  const regex = /(\n\[\s*FEN\s*((\"\s*\")|(\'\s*\'))\])/gm;
+  text = text.replace(regex, '');
+  header = header.replace(regex, '');
+  text = header + text;
 
   let element = window.document.createElement('a');
   element.href = window.URL.createObjectURL(
@@ -155,53 +191,9 @@ export function generateFileName() {
   return `Chessify-${date.getMonth()}-${date.getDate()}-${date.getFullYear()}-${date.getHours()}-${date.getMinutes()}`;
 }
 
-export function getPgnFileHeader(pgnStr) {
-  const chess = new Chess();
-  chess.load_pgn(pgnStr, { sloppy: true });
-  const header = chess.header();
-  return {
-    white: header.White && header.White.length ? header.White : null,
-    black: header.Black && header.Black.length ? header.Black : null,
-    whiteElo:
-      header.WhiteElo && header.WhiteElo.length ? header.WhiteElo : null,
-    blackElo:
-      header.BlackElo && header.BlackElo.length ? header.BlackElo : null,
-    ecoCode: header.ECO && header.ECO.length ? header.ECO : null,
-    date: header.Date && header.Date.length ? header.Date : null,
-    tournament: header.Event && header.Event.length ? header.Event : null,
-    round:
-      header.Round &&
-      header.Round.split('.')[0] &&
-      header.Round.split('.')[0].length
-        ? header.Round.split('.')[0]
-        : null,
-    subround:
-      header.Round &&
-      header.Round.split('.')[1] &&
-      header.Round.split('.')[1].length
-        ? header.Round.split('.')[1]
-        : null,
-    result:
-      header.Result && header.Result.length
-        ? convertResultBack(header.Result)
-        : null,
-    annotator:
-      header.Annotator && header.Annotator.length ? header.Annotator : null,
-    source:
-      header.SourceTitle && header.SourceTitle.length
-        ? header.SourceTitle
-        : null,
-    whiteTeam:
-      header.WhiteTeam && header.WhiteTeam.length ? header.WhiteTeam : null,
-    blackTeam:
-      header.BlackTeam && header.BlackTeam.length ? header.BlackTeam : null,
-  };
-}
-
-export const getPgnNextMoves = (pgn, fen) => {
+export const getPgnNextMoves = (pgn, fen, doMove) => {
   let foundIndx = null;
   let nextMoves = '';
-  let numOfMv = 1;
 
   const fenArr = fen.split(' ');
   const regex = new RegExp(
@@ -219,23 +211,22 @@ export const getPgnNextMoves = (pgn, fen) => {
       chess.move(history[i]);
       let currentFen = chess.fen();
       if (regex.test(currentFen)) {
-        foundIndx = i + 1;
+        foundIndx = i;
       }
     }
   }
-  while (history[foundIndx] && numOfMv <= 10) {
+  let lastMoveNum = '';
+  while (history[foundIndx]) {
     let moveNum = '';
     if (foundIndx % 2 === 0) {
       moveNum = foundIndx / 2 + 1 + '. ';
-    } else if (numOfMv === 1) {
-      moveNum = '...';
+      lastMoveNum = foundIndx / 2 + 1;
     }
     nextMoves += moveNum + history[foundIndx] + ' ';
+    doMove(history[foundIndx]);
     foundIndx += 1;
-    numOfMv++;
   }
-
-  return nextMoves;
+  return lastMoveNum;
 };
 
 export const getPgnEvent = (pgn) => {
@@ -251,47 +242,111 @@ export const getPgnWithoutHeader = (pgn) => {
   return pgn[1];
 };
 
-export const getPgnData = (pgn, fen) => {
-  chess.load_pgn(pgn);
-  const title = chess.header().Event;
-  chess.delete_comments();
-  pgn = chess.pgn().split('\n\n');
-  const pgnWithoutHeader = pgn[1];
+const findFenMatchesHelper = (fen, moves, searchingFen, foundMatches) => {
+  const chess = new Chess(fen);
+  moves.forEach((mv) => {
+    const currentFen = chess.fen();
+    chess.move(mv.move);
+    const nextFen = chess.fen();
+    if (nextFen.includes(searchingFen)) {
+      foundMatches.push({ fen: nextFen, move: mv });
+    }
+    if (mv.ravs) {
+      mv.ravs.forEach((mvRav) => {
+        findFenMatchesHelper(
+          currentFen,
+          mvRav.moves,
+          searchingFen,
+          foundMatches
+        );
+      });
+    }
+  });
+};
 
-  let foundIndx = null;
-  let pgnNextMoves = '';
-  let numOfMv = 1;
+export const findFenMatches = (fen, pgn) => {
+  const searchingFen = fen.split(' ')[0];
+  let fenHeader =
+    pgn.headers &&
+    pgn.headers.find((header) => header.name === 'FEN') &&
+    pgn.headers.find((header) => header.name === 'FEN').value;
+  const initalFen = fenHeader || INITIAL_FEN;
+  let foundMatches = [];
+  if (initalFen.includes(searchingFen)) {
+    foundMatches.push({ fen: initalFen, move: {} });
+  }
+  if (!pgn.moves || (pgn.moves && !pgn.moves.length)) return foundMatches;
 
-  const fenArr = fen.split(' ');
-  const regex = new RegExp(
-    `${fenArr[0]}\\s${fenArr[1]}\\s${fenArr[2]}\\s([^\\s]*)\\s${fenArr[4]}\\s${fenArr[5]}`
+  findFenMatchesHelper(initalFen, pgn.moves, searchingFen, foundMatches);
+
+  return foundMatches;
+};
+
+export const findNextActiveMove = (activeMove, allMatchedFens, pgn) => {
+  const currentIndx = allMatchedFens.findIndex(
+    (matchedFen) =>
+      matchedFen.move &&
+      matchedFen.move.move_id &&
+      matchedFen.move.move_id === activeMove.move_id
   );
 
-  const history = chess.history();
-  chess.reset();
+  let i = currentIndx === allMatchedFens.length - 1 ? 0 : currentIndx + 1;
+  let rootVarActive = findRootVariations(activeMove).reverse();
+  rootVarActive.push(activeMove.move_id);
+  const indexedPathActive = findIndexedPath([pgn], rootVarActive);
 
-  if (regex.test(chess.fen())) {
-    foundIndx = 0;
-  } else {
-    for (let i = 0; i < history.length; i++) {
-      chess.move(history[i]);
-      let currentFen = chess.fen();
-      if (regex.test(currentFen)) {
-        foundIndx = i + 1;
+  while (true) {
+    const matchedMove = allMatchedFens[i].move;
+    if (matchedMove.move) {
+      let rootVarMatch = findRootVariations(matchedMove).reverse();
+      rootVarMatch.push(matchedMove.move_id);
+      const indexedPathMatched = findIndexedPath([pgn], rootVarMatch);
+
+      let sameLevel = true;
+      if (indexedPathActive.length === indexedPathMatched.length) {
+        for (let i = 0; i < indexedPathActive.length; i++) {
+          const differentRavs =
+            indexedPathActive[i].ravInd !== indexedPathMatched[i].ravInd;
+          const differentMoves =
+            i !== indexedPathActive.length - 1 &&
+            indexedPathActive[i].moveInd !== indexedPathMatched[i].moveInd;
+          if (differentRavs || differentMoves) {
+            sameLevel = false;
+          }
+        }
+      }
+      if (
+        !sameLevel ||
+        indexedPathActive.length !== indexedPathMatched.length
+      ) {
+        return matchedMove;
       }
     }
-  }
-  while (history[foundIndx] && numOfMv <= 10) {
-    let moveNum = '';
-    if (foundIndx % 2 === 0) {
-      moveNum = foundIndx / 2 + 1 + '. ';
-    } else if (numOfMv === 1) {
-      moveNum = '...';
-    }
-    pgnNextMoves += moveNum + history[foundIndx] + ' ';
-    foundIndx += 1;
-    numOfMv++;
-  }
 
-  return { title, pgnWithoutHeader, pgnNextMoves };
+    if (i === currentIndx) {
+      return activeMove;
+    } else if (!matchedMove.move && activeMove.layer !== 0) {
+      return {};
+    } else {
+      i = i === allMatchedFens.length - 1 ? 0 : +1;
+    }
+  }
 };
+
+export const getPgnData = (fen, pgn) => {
+  const moveNumber = fen.split(' ')[5];
+
+  if (moveNumber == 0) {
+    return pgn.substr(pgn.indexOf(`\n1. `), 40);
+  } else {
+    return pgn.substr(pgn.indexOf(`${parseInt(moveNumber)}. `), 40);
+  }
+};
+
+export const findNextMoveNumFromFen = (fen) => {
+  chess.load(fen);
+  let moveNumber = fen.split(' ');
+  moveNumber = moveNumber[moveNumber.length - 1];
+  const color = chess.turn();
+  return `${moveNumber}.${color === 'w' ? '' : '..'} `
+}

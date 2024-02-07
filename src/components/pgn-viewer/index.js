@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { connect } from 'react-redux';
 import { BrowserView, MobileView } from 'react-device-detect';
+import { useSearchParams } from 'react-router-dom';
 import DesktopPGNViewer from './DesktopPGNViewer';
 import MobilePGNViewer from './MobilePGNViewer';
 import SubAnalyzeCheckerModal from './SubAnalyzeCheckerModal';
@@ -8,12 +9,20 @@ import {
   checkForUnlimitedPopUp,
   filterUnlimitedServerNames,
 } from '../../utils/utils';
-import { stopServer } from '../../utils/api';
+import { stopServer} from '../../utils/api';
 import UploadsLimitModal from './UploadsLimitModal';
 import UploadSizeModal from './UploadSizeModal';
 import FreeTrialModal from './FreeTrialModal';
-import { setSubModal } from '../../actions/cloud';
+import { setSubModal , setSavedAnalyzeInfo, getUserServersInfo} from '../../actions/cloud';
+import {
+  setActiveMove,
+  setActivePgnTab,
+  setSwitchedTabAnalyzingFen,
+} from '../../actions/board';
 import TrialStatusModal from './TrialStatusModal';
+import { modifyAllPgnArr } from '../../utils/pgn-viewer';
+import SurvayModal from './SurvayModal';
+import CurrentlyAnalyzingModal from './CurrentlyAnalyzingModal'
 
 const mapStateToProps = (state) => {
   return {
@@ -22,7 +31,7 @@ const mapStateToProps = (state) => {
     freeAnalyzer: state.cloud.freeAnalyzer,
     proAnalyzers: state.cloud.proAnalyzers,
     numPV: state.cloud.numPV,
-    userFullInfo: state.cloud.userFullInfo,
+    serverInfo: state.cloud.serverInfo,
     uploadLimitExceeded: state.board.uploadLimitExceeded,
     uploadSizeExceeded: state.board.uploadSizeExceeded,
     mType: state.cloud.mType,
@@ -30,6 +39,10 @@ const mapStateToProps = (state) => {
     analyzingFenTabIndx: state.board.analyzingFenTabIndx,
     switchedTabAnalyzeFen: state.board.switchedTabAnalyzeFen,
     pauseAnalysisUpdate: state.cloud.pauseAnalysisUpdate,
+    isColorSwitched: state.cloud.isColorSwitched,
+    activeMove: state.board.activeMove,
+    allPgnArr: state.board.allPgnArr,
+    plans: state.cloud.plans,
   };
 };
 
@@ -42,7 +55,7 @@ const PGNViewer = (props) => {
     numPV,
     activeTab,
     setActiveTab,
-    userFullInfo,
+    serverInfo,
     uploadLimitExceeded,
     uploadSizeExceeded,
     mType,
@@ -51,16 +64,32 @@ const PGNViewer = (props) => {
     analyzingFenTabIndx,
     switchedTabAnalyzeFen,
     pauseAnalysisUpdate,
+    setScannerImg,
+    isColorSwitched,
+    activeMove,
+    allPgnArr,
+    setActiveMove,
+    setActivePgnTab,
+    setSwitchedTabAnalyzingFen,
+    plans,
+    setLoginModal,
+    setSavedAnalyzeInfo,
+    getUserServersInfo,
   } = props;
   const [fenToAnalyze, setFenToAnalyze] = useState(fen);
   const [unlimitedNamesArr, setUnlimitedNamesArr] = useState(
-    filterUnlimitedServerNames(userFullInfo)
+    filterUnlimitedServerNames(serverInfo, plans)
   );
 
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showTrialModal, setShowTrialModal] = useState(false);
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [showTrialStatusModal, setShowTrialStatusModal] = useState(false);
+  const [showSurvayStatusModal, setShowSurvayStatusModal] = useState(false);
+  const [currentlyAnalyzingModal, setCurrentlyAnalyzingModal] = useState(false);
+  const [bringServersSocketData, setBringServersSocketData] = useState(null)
+  const [isFocus, setIsFocus] = useState(false)
+  const [initFreeAnalysis, setInitFreeAnalysis] = useState(false);
 
   useEffect(() => {
     const url_string = window.location.href;
@@ -84,19 +113,55 @@ const PGNViewer = (props) => {
       setShowTrialModal(true);
     } else if (mType === 'after5Min' || mType === 'reference') {
       setShowLimitModal(true);
+    } else if (mType === 'survey') {
+      setShowSurvayStatusModal(true);
+    }else if(mType === 'currently_analyzing'){
+      setCurrentlyAnalyzingModal(true)
     }
+
   }, [mType]);
 
   useEffect(() => {
-    let names = filterUnlimitedServerNames(userFullInfo);
+    let names = filterUnlimitedServerNames(serverInfo, plans);
     if (names.length > unlimitedNamesArr.length) setUnlimitedNamesArr(names);
-  }, [Object.keys(userFullInfo.servers).length]);
+  }, [
+    serverInfo && serverInfo.servers
+      ? Object.keys(serverInfo.servers).length
+      : null,
+  ]);
+
+  useEffect(() => {
+    window.onbeforeunload = function () {
+      sessionStorage.removeItem('chessify_next_games');
+      setActiveMove(activeMove);
+      setActivePgnTab(activePgnTab);
+      modifyAllPgnArr(allPgnArr);
+      window.sessionStorage.setItem(
+        'chessify_active_notation_tab',
+        activePgnTab
+      );
+      window.sessionStorage.setItem(
+        'chessify_analysis_notation_tab',
+        analyzingFenTabIndx
+      );
+      window.sessionStorage.setItem(
+        'chessify_notation_tab_arr',
+        JSON.stringify(allPgnArr)
+      );
+      
+      return;
+    };
+    return () => {
+      window.onbeforeunload = null;
+    };
+  }, [activePgnTab, analyzingFenTabIndx, allPgnArr, activeMove]);
 
   const needAnalyzeCheck =
     proAnalyzers &&
-    userFullInfo &&
-    checkForUnlimitedPopUp(userFullInfo) &&
-    userFullInfo.subscription;
+    serverInfo &&
+    checkForUnlimitedPopUp(serverInfo, plans) &&
+    plans &&
+    plans.subscription;
 
   ////
   // ANALYZING POSITION
@@ -117,7 +182,16 @@ const PGNViewer = (props) => {
       updatedAnalyzeTabIndx ||
       pauseAnalysisUpdate
     ) {
+      if (backToActiveAnalyzeTab) setSwitchedTabAnalyzingFen('');
       return;
+    }
+
+    let newFen = fen;
+
+    if (isColorSwitched) {
+      newFen = fen.includes(' w ')
+        ? fen.replace(' w ', ' b ')
+        : fen.replace(' b ', ' w ');
     }
 
     if (!proAnalyzers) {
@@ -125,21 +199,19 @@ const PGNViewer = (props) => {
         command: 'go',
         fen,
         token,
-        sub: false,
-        numPV: numPV,
+        PV: 3,
       };
-
       freeAnalyzer.analyzer.emit('analyze', data);
     } else {
       proAnalyzers.forEach((pa) => {
         pa.analyzer.send('stop');
         pa.analyzer.send(`setoption name MultiPV value ${numPV[pa.name]}`);
-        pa.analyzer.send(`position fen ${fen}`);
+        pa.analyzer.send(`position fen ${newFen}`);
         pa.analyzer.send('go infinite');
       });
     }
 
-    setFenToAnalyze(fen);
+    setFenToAnalyze(newFen);
   };
 
   ////
@@ -168,27 +240,31 @@ const PGNViewer = (props) => {
       });
     }
   };
-
   const handleStopServer = () => {
     if (!proAnalyzers) return;
-
     const isSubscriptionUnlim =
-      userFullInfo.subscription &&
-      (parseInt(userFullInfo.subscription.product_id) === 22 ||
-        parseInt(userFullInfo.subscription.product_id) === 23);
+      plans &&
+      plans.subscription &&
+      (parseInt(plans.subscription.product_id) === 22 ||
+        parseInt(plans.subscription.product_id) === 23 ||
+        parseInt(plans.subscription.product_id) === 25);
 
-    for (const [engine, params] of Object.entries(userFullInfo.servers)) {
+    for (const [engine, params] of Object.entries(serverInfo.servers)) {
       if (
         params[0] &&
         (params[0].cores === 32 ||
+          params[0].cores === 16 ||
           (params[0].cores === 100 && isSubscriptionUnlim))
       ) {
         stopServer(engine)
           .then((response) => {
             if (response.error) {
+              if(response.servers)
+              getUserServersInfo({servers:response.servers})
               console.log('ERROR STOPPING');
               return;
             } else {
+              getUserServersInfo({servers:response.servers})
               console.log('Success stoped');
             }
           })
@@ -198,6 +274,22 @@ const PGNViewer = (props) => {
       }
     }
   };
+
+  useEffect(() => {
+    if (freeAnalyzer && !initFreeAnalysis) {
+      handleAnalyze();
+      setInitFreeAnalysis(true);
+    }
+  }, [freeAnalyzer]);
+
+  useEffect(() => {
+    const savedAnalyzeInfoFromSessionStorage = JSON.parse(
+      sessionStorage.getItem('latest_analyze_info')
+    );
+    if (savedAnalyzeInfoFromSessionStorage) {
+      setSavedAnalyzeInfo(savedAnalyzeInfoFromSessionStorage);
+    }    
+  }, [serverInfo]);
 
   return (
     <React.Fragment>
@@ -209,6 +301,12 @@ const PGNViewer = (props) => {
           handleStopAnalyze={handleStopAnalyze}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          setScannerImg={setScannerImg}
+          setBringServersSocketData = {setBringServersSocketData}
+          setCurrentlyAnalyzingModal = {setCurrentlyAnalyzingModal}
+          isFocus = {isFocus}
+          setIsFocus = {setIsFocus}
+          setLoginModal={setLoginModal}
         />
       </BrowserView>
       <MobileView>
@@ -219,6 +317,12 @@ const PGNViewer = (props) => {
           handleStopAnalyze={handleStopAnalyze}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          setScannerImg={setScannerImg}
+          setBringServersSocketData = {setBringServersSocketData}
+          setCurrentlyAnalyzingModal = {setCurrentlyAnalyzingModal}
+          isFocus = {isFocus}
+          setIsFocus = {setIsFocus}
+          setLoginModal={setLoginModal}
         />
       </MobileView>
       {needAnalyzeCheck && (
@@ -246,10 +350,29 @@ const PGNViewer = (props) => {
         showModal={showTrialStatusModal}
         setShowModal={setShowTrialStatusModal}
       />
+      <SurvayModal
+        showModal={showSurvayStatusModal}
+        setShowModal={setShowSurvayStatusModal}
+        setSubModal={setSubModal}
+      />
+     {bringServersSocketData && <CurrentlyAnalyzingModal
+        showModal={currentlyAnalyzingModal}
+        setShowModal={setCurrentlyAnalyzingModal}
+        setSubModal={setSubModal}
+        bringServersSocketData = {bringServersSocketData}
+        setIsFocus = {setIsFocus}
+        activePgnTab = {activePgnTab}
+      />
+     }
     </React.Fragment>
   );
 };
 
 export default connect(mapStateToProps, {
   setSubModal,
+  setActiveMove,
+  setActivePgnTab,
+  setSwitchedTabAnalyzingFen,
+  setSavedAnalyzeInfo,
+  getUserServersInfo
 })(PGNViewer);

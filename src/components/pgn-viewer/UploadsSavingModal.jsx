@@ -5,7 +5,7 @@ import { uploadFiles } from '../../actions/board';
 
 const mapStateToProps = (state) => {
   return {
-    userFullInfo: state.cloud.userFullInfo,
+    userInfo: state.cloud.userInfo,
     allPgnArr: state.board.allPgnArr,
     pgnStr: state.board.pgnStr,
     activePgnTab: state.board.activePgnTab,
@@ -20,7 +20,7 @@ const UploadsSavingModal = ({
   allPgnArr,
   closeTab,
   uploadFiles,
-  userFullInfo,
+  userInfo,
   pgnStr,
   activePgnTab,
 }) => {
@@ -51,7 +51,7 @@ const UploadsSavingModal = ({
     transfer.items.add(file);
     let fileList = transfer.files;
 
-    uploadFiles(path, fileList, userFullInfo).then(() => {
+    uploadFiles(path, fileList, userInfo).then(() => {
       closeWithoutSavingHandler();
     });
   };

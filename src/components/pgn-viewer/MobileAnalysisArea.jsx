@@ -5,6 +5,7 @@ import { doMove } from '../../actions/board';
 import { updateNumPV } from '../../actions/cloud';
 import { ENGINES } from '../../constants/cloud-params';
 import { IoIosAdd, IoIosRemove } from 'react-icons/io';
+import * as Sentry from "@sentry/react";
 
 const mapStateToProps = (state) => {
   return {
@@ -16,9 +17,8 @@ const mapStateToProps = (state) => {
 };
 
 const getEngineName = (analyzer) => {
-  let engineName = `${ENGINES[analyzer.analysis.engine]} ${
-    analyzer.temp ? '(Free)' : ''
-  } `;
+  let engineName = `${ENGINES[analyzer.analysis.engine]} ${analyzer.temp ? '(Free)' : ''
+    } `;
 
   // LCZero engine is running Stockfish temporary
   if (analyzer.analysis.engine === 'lc0' && analyzer.temp) {
@@ -39,30 +39,40 @@ const AnalysisBlock = ({ engine, analysis, fenToAnalyze, doMove }) => {
   return (
     <div className="analysis-block">
       <div className="title rbt-section-title">
-        <h6 className="text-center">{`${engine} | depth: ${
-          analysis.depth
-        } | speed: ${
-          analysis.variations[0] &&
+        <h6 className="text-center">{`${engine} | depth: ${analysis.depth
+          } | speed: ${analysis.variations[0] &&
           Math.floor(parseInt(analysis.variations[0].nps) / 1000)
-        } kn/s`}</h6>
+          } kn/s`}</h6>
       </div>
 
       <ul className="list-style--1" style={{ whiteSpace: 'nowrap' }}>
-        {analysis.variations.map((variation) => (
-          <li>
-            <span className="result">{`${variation.score}: `}</span>
-            {variation.pgn &&
-              addMoveNumbersToSans(
-                fenToAnalyze,
-                variation.pgn
-              ).map((moveObj, i) => (
-                <button
-                  className="analyze-move"
-                  onClick={() => handleMoveClick(variation.pgn, i)}
-                >{`${moveObj.move_number} ${moveObj.move} `}</button>
-              ))}
-          </li>
-        ))}
+        {analysis.variations.map((variation) => {
+          try {
+            return (
+              <li>
+                <span className="result">{`${variation.score}: `}</span>
+                {variation.pgn &&
+                  addMoveNumbersToSans(
+                    fenToAnalyze,
+                    variation.pgn
+                  ).map((moveObj, i) => (
+                    <button
+                      className="analyze-move"
+                      onClick={() => handleMoveClick(variation.pgn, i)}
+                    >{`${moveObj.move_number} ${moveObj.move} `}</button>
+                  ))}
+              </li>
+            )
+          } catch (error) {
+            console.log("VARIATION SCORE ERROR", analysis.variations)
+            Sentry.captureException(error, {
+              extra: {
+                variations: analysis.variations,
+              },
+            });
+            return <></>;
+          }
+        })}
       </ul>
     </div>
   );
@@ -90,8 +100,8 @@ const MobileAnalysisArea = ({
   const analyzers = proAnalyzers
     ? proAnalyzers
     : freeAnalyzer
-    ? [freeAnalyzer]
-    : [];
+      ? [freeAnalyzer]
+      : [];
 
   return (
     <React.Fragment>

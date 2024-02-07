@@ -46,6 +46,7 @@ const MoveContextmenu = (props) => {
             }}
           >
             <div>Promote Variation</div>
+            <div className='hotkey'>Alt+Up</div>
           </button>
         </li>
         <li className="menu-item">
@@ -135,7 +136,8 @@ const MoveContextmenu = (props) => {
               setCommentField(true);
             }}
           >
-            <span>Add Comment</span>
+            <div>Add Comment</div>
+            <div className='hotkey'>Ctrl+A</div>
           </button>
         </li>
         <li className="menu-item">
@@ -267,6 +269,7 @@ const MoveContextmenu = (props) => {
                   src={require('../../../public/assets/images/toolbar-symbols/only-move.svg')}
                   className="gray-tool"
                   alt="Only move"
+                  width={20}
                 />
               </button>
             </li>
@@ -352,6 +355,21 @@ const MoveContextmenu = (props) => {
                 type="button"
                 className={`menu-btn ${reverse ? 'flex-row-reverse' : ''}`}
                 onClick={() => {
+                  addNags(activeMove, '$14');
+                }}
+              >
+                <img
+                  src={require('../../../public/assets/images/toolbar-symbols/white-slightly-better.svg')}
+                  className="gray-tool"
+                  alt="White is slightly better"
+                />
+              </button>
+            </li>
+            <li className="menu-item">
+              <button
+                type="button"
+                className={`menu-btn ${reverse ? 'flex-row-reverse' : ''}`}
+                onClick={() => {
                   addNags(activeMove, '$11');
                 }}
               >
@@ -374,6 +392,21 @@ const MoveContextmenu = (props) => {
                   src={require('../../../public/assets/images/toolbar-symbols/unclear.svg')}
                   className="gray-tool"
                   alt="Unclear"
+                />
+              </button>
+            </li>
+            <li className="menu-item">
+              <button
+                type="button"
+                className={`menu-btn ${reverse ? 'flex-row-reverse' : ''}`}
+                onClick={() => {
+                  addNags(activeMove, '$15');
+                }}
+              >
+                <img
+                  src={require('../../../public/assets/images/toolbar-symbols/black-slightly-better.svg')}
+                  className="gray-tool"
+                  alt="Black is slightly better"
                 />
               </button>
             </li>
@@ -419,6 +452,42 @@ const MoveContextmenu = (props) => {
                   src={require('../../../public/assets/images/toolbar-symbols/counterplay.svg')}
                   className="gray-tool"
                   alt="Counterplay"
+                />
+              </button>
+            </li>
+            <li className="menu-item">
+              <button
+                type="button"
+                className={`menu-btn ${reverse ? 'flex-row-reverse' : ''}`}
+                onClick={() => {
+                  addNags(
+                    activeMove,
+                    checkIsBlackMove(activeMove) ? '$41' : '$40'
+                  );
+                }}
+              >
+                <img
+                  src={require('../../../public/assets/images/toolbar-symbols/attack.svg')}
+                  className="gray-tool"
+                  alt="With attack"
+                />
+              </button>
+            </li>
+            <li className="menu-item">
+              <button
+                type="button"
+                className={`menu-btn ${reverse ? 'flex-row-reverse' : ''}`}
+                onClick={() => {
+                  addNags(
+                    activeMove,
+                    checkIsBlackMove(activeMove) ? '$37' : '$36'
+                  );
+                }}
+              >
+                <img
+                  src={require('../../../public/assets/images/toolbar-symbols/initiative.svg')}
+                  className="gray-tool"
+                  alt="Initiative"
                 />
               </button>
             </li>

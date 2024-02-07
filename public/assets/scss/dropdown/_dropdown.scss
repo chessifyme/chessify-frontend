@@ -1,0 +1,107 @@
+@import '../../../../src/colors/colors';
+@import '../../../../src/light-dark-mode';
+
+.dropDownList {
+  width: 160px;
+  height: 200px;
+  padding: 8px 0px;
+  position: absolute;
+  z-index: 1000;
+  top: 88px;
+  right: 190px;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  justify-content: center;
+  gap: 10px;
+  background: var(--background-color);
+  box-shadow: 0px 8px 19px var(--box-shadow);
+  overflow-y: scroll;
+
+  .dropMenu-back {
+    width: 160px;    
+    position: fixed;
+    top: 55px;
+
+    & button {
+      display: flex;
+      align-items: center;
+      gap:3px;
+
+      width: 100%;
+      border: none;
+      padding: 8px 0;
+
+      font-weight: 500;
+      font-size: 12px;
+      line-height: 18px;
+      color: #358c65;
+
+      background: var(--background-color);
+      box-shadow: 0px 8px 19px var(--box-shadow);
+
+      transition: all 0.3s ease-in;
+
+      &:hover,
+      &:focus {
+        color: #ffffff;
+        background-color: #358c65;
+      }
+      svg{
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+
+  }
+
+  .dropDown-item {
+    border: 1px solid transparent;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 54px;
+    height: 40px;
+    scale: (1);
+
+    &:focus,
+    &:hover {
+      scale: (0.8);
+    }
+
+    &.active {
+      border: 7px solid #358c65 !important;
+      scale: (1.2)
+    }
+  }
+}
+
+.mobile-dropDownList {
+  width: 70%;
+  height: 160px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  justify-content: center;
+  gap: 5px;
+  overflow-y: scroll;
+
+  .dropDown-item {
+    border: 1px solid transparent;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 54px;
+    height: 40px;
+    scale: (1);
+
+    &:focus,
+    &:hover {
+      scale: (0.8);
+    }
+
+    &.active {
+      border: 7px solid #358c65 !important;
+      scale: (1.2)
+    }
+  }
+}

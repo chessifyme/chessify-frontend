@@ -10,27 +10,34 @@ const mapStateToProps = (state) => {
   return {
     fen: state.board.fen,
     videosFen: state.cloud.videosFen,
-    userFullInfo: state.cloud.userFullInfo,
+    userInfo: state.cloud.userInfo,
+    isGuestUser: state.cloud.isGuestUser,
   };
 };
 
 const VideosArea = ({
   fen,
-  userFullInfo,
+  userInfo,
   videosFen,
   setVideosFen,
   tabIsOpen,
   setVideoLimit,
+  isGuestUser,
+  setLoginModal,
 }) => {
   const [showRange, setShowRange] = useState(VIDEOS_COUNT_PER_PAGE);
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [youtubeVideos, setYoutubeVideos] = useState([]);
 
   async function getVideosHandler() {
+    if (isGuestUser) {
+      setLoginModal(true);
+      return;
+    }
     const shortFen = fen.split(' ')[0];
     setVideosFen(fen);
     setLoadingVideos(true);
-    getVideos(userFullInfo.token, shortFen)
+    getVideos(userInfo.token, shortFen)
       .then((videos) => {
         setYoutubeVideos(
           videos.filter((video) => video.type === 'YoutubeFetcher')
@@ -45,9 +52,14 @@ const VideosArea = ({
   }
 
   useEffect(() => {
-    if (tabIsOpen) {
-      getVideosHandler();
-    }
+    const identifier = setTimeout(() => {
+      if (tabIsOpen) {
+        getVideosHandler();
+      }
+    }, 100);
+    return () => {
+      clearTimeout(identifier);
+    };
   }, [fen]);
 
   return loadingVideos ? (

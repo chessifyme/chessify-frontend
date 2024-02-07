@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { connect } from 'react-redux';
 import { Modal, Button } from 'react-bootstrap';
 import { setAnalyzingFenTabIndx } from '../../actions/board';
@@ -18,14 +18,26 @@ function SubAnalyzeCheckerModal({
   const [showModal, setShowModal] = useState(false);
   const [showModalTimeout, setShowModalTimeout] = useState(NaN);
   const [stopAnalyzeTimeout, setStopAnalyzeTimeout] = useState(NaN);
+  const [isPlaying, setIsPlaying] = useState(false);
+
 
   const startModalShowingTimeout = () => {
     if (showModalTimeout) clearTimeout(showModalTimeout);
     const smt = setTimeout(() => {
+      setIsPlaying(true)
       setShowModal(true);
     }, 1800000);
     setShowModalTimeout(smt);
   };
+  const play = useCallback(() => {
+    if (isPlaying) {
+      const audio = new Audio(require('../../../public/assets/sounds/audio.wav'))
+      audio.play();
+    } else {
+      return;
+    }
+
+  }, [isPlaying])
 
   const startStopAnalyzeTimeout = () => {
     if (!showModal) return;
@@ -34,7 +46,7 @@ function SubAnalyzeCheckerModal({
       clearTimeouts();
       stop();
       setAnalyzingFenTabIndx(null);
-    }, 60000);
+     }, 60000);
     setStopAnalyzeTimeout(sat);
   };
 
@@ -49,11 +61,17 @@ function SubAnalyzeCheckerModal({
     setShowModalTimeout(NaN);
     setStopAnalyzeTimeout(NaN);
     setShowModal(false);
+    setIsPlaying(false)
   };
 
   useEffect(startModalShowingTimeout, [fen, unlimitedNamesArr]);
 
   useEffect(startStopAnalyzeTimeout, [showModal]);
+  useEffect(() => {
+
+    play()
+  }, [isPlaying]);
+
 
   // console.log('MODAL TIMEOUT: ', showModalTimeout);
   // console.log('STOP TIMEOUT: ', stopAnalyzeTimeout);

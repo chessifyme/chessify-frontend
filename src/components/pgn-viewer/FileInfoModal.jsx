@@ -8,7 +8,7 @@ const FileInfoModal = ({
   setIsOpen,
   editingFile,
   setLoader,
-  userFullInfo,
+  userInfo,
 }) => {
   const [userInput, setUserInput] = useState({
     white: '',
@@ -87,7 +87,7 @@ const FileInfoModal = ({
       editingFile.id,
       editingFile.name,
       userInput,
-      userFullInfo.token
+      userInfo.token
     ).then(() => {
       setIsLoading(false);
       closeModalHandler();

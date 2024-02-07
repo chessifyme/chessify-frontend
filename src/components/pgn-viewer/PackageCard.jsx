@@ -16,7 +16,7 @@ const PackageCard = ({ products, limitType }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         subscriptionProductId: plan.id,
-        price: null
+        price: null,
       }),
     };
     const response = await fetch(
@@ -52,7 +52,7 @@ const PackageCard = ({ products, limitType }) => {
                     />
                   </div>
                   <div>
-                    Unlimited server speed: <b>10 MN/s</b>
+                    Unlimited server speed: <b>{prod.id === 15 ? "10 MN/s" : "25-100 MN/s"}</b>
                   </div>
                 </div>
                 <div className="package-engines d-flex flex-row">
@@ -65,7 +65,7 @@ const PackageCard = ({ products, limitType }) => {
                     />
                   </div>
                   <div>
-                    Engines: Stockfish, AsmFish, SugaR AI, Berserk, Koivisto
+                    Engines: Stockfish, AsmFish, SugaR AI, Berserk, Koivisto, RubiChess, ShashChess
                   </div>
                 </div>
                 <div>
@@ -75,7 +75,7 @@ const PackageCard = ({ products, limitType }) => {
                     height={20}
                     alt=""
                   />
-                  Cloud Storage: <b>50 PGN</b>
+                  Cloud Storage: <b>{prod.id === 15 ? "500 PGN" : "Unlimited"}</b>
                 </div>
                 <div>
                   <img
@@ -106,16 +106,22 @@ const PackageCard = ({ products, limitType }) => {
                 </div>
               </div>
               <div>
-                <button
+              <button
                   className="subscribe-btn"
                   onClick={() => {
                     setIsLoading(true);
                     subscribeHandler(prod);
                   }}
                 >
-                  Start Free Trial{' '}
-                  {isLoading ? <div className="circle-loader"></div> : <></>}
+                  {isLoading ? (
+                    <div className="circle-loader"></div>
+                  ) : prod.id === 15 ? (
+                    'Start Free Trial'
+                  ) : (
+                    'Subscribe'
+                  )}
                 </button>
+
               </div>
             </div>
           );

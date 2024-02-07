@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Modal, Button } from 'react-bootstrap';
 import Table from 'react-bootstrap/Table';
 
-const CoinsCardModal = ({ showModal, setShowModal }) => {
+const CoinsCardModal = ({ showModal, setShowModal, isGuestUser }) => {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleCloseModal = () => {
@@ -10,6 +10,10 @@ const CoinsCardModal = ({ showModal, setShowModal }) => {
   };
 
   const buyCoinsHandler = async (price) => {
+    if (isGuestUser) {
+      window.location.href = '/auth/signin';
+      return;
+    }
     const request_body = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -109,7 +113,7 @@ const CoinsCardModal = ({ showModal, setShowModal }) => {
                     className="subscribe-btn"
                     onClick={() => {
                       setIsLoading(true);
-                      buyCoinsHandler(15);
+                      buyCoinsHandler(25);
                     }}
                   >
                     Buy for $25
@@ -128,7 +132,7 @@ const CoinsCardModal = ({ showModal, setShowModal }) => {
             <th scope="row" rowSpan="4">
               Stockfish
             </th>
-            <td>110 MN/s</td>
+            <td>130 MN/s</td>
             <td>10 coins/minutes</td>
           </tr>
           <tr>
@@ -150,7 +154,7 @@ const CoinsCardModal = ({ showModal, setShowModal }) => {
           </tr>
           <tr>
             <th scope="row">
-              AsmFish, Berserk, Koivisto, <br /> SugaR AI, RubiChess
+              AsmFish, Berserk, Koivisto, <br /> SugaR AI, RubiChess, ShashChess
             </th>
             <td>130 MN/s</td>
             <td>10 coins/minutes</td>

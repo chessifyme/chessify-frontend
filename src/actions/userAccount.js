@@ -32,17 +32,11 @@ export function getStatistics(usageInfo) {
   };
 }
 
-export function getUserAccountDat(userAccountData) {
-  return {
-    type: USER_ACCOUNT_ACTION_TYPE.GET_USER_ACCOUNT_INFO,
-    payload: { userAccountData },
-  };
-}
+
 
 export default {
   setIsSavedPasswordModalOpen,
   setIsResetPasswordModalOpen,
   getProductDetails,
   getStatistics,
-  getUserAccountDat,
 };

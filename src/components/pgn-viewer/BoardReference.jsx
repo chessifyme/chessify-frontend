@@ -3,13 +3,15 @@ import { connect } from 'react-redux';
 import SearchFilterModal from './SearchFilterModal';
 import GameReference from './GameReference';
 import PlayersList from './PlayersList';
+import { BrowserView, MobileView } from 'react-device-detect';
+import { Modal } from 'react-bootstrap';
 import { searchPlayers } from '../../utils/api';
 import { modifySearchParam } from '../../utils/pgn-viewer';
 import {
   setGameReference,
   setReference,
   setMoveLoader,
-  setGameRefLoader,
+  setLoader,
   setTourNextStep,
 } from '../../actions/board';
 
@@ -28,8 +30,7 @@ const BoardReference = ({
   setReference,
   setGameReference,
   setMoveLoader,
-  setGameRefLoader,
-  setActiveTab,
+  setLoader,
   tourStepNumber,
   tourType,
   setTourNextStep,
@@ -38,6 +39,7 @@ const BoardReference = ({
   const [playerSearchInput, setPlayerSearchInput] = useState('');
   const [playersData, setPlayersData] = useState([]);
   const [showPlayersList, setShowPlayersList] = useState(false);
+  const [mobileViewModal, setMobileViewModal] = useState(false);
 
   const outsideClickHandler = () => {
     if (showPlayersList) setShowPlayersList(false);
@@ -62,7 +64,9 @@ const BoardReference = ({
   const searchParamRemoveHandler = (param, fen, searchParams) => {
     let updatedSearchParams = { ...searchParams };
     if (
-      (param == 'ignoreColor' || param.includes('result')) &&
+      (param == 'ignoreColor' ||
+        param.includes('result') ||
+        param.includes('ignoreBlitzRapid')) &&
       searchParams[param]
     ) {
       updatedSearchParams = {
@@ -73,7 +77,7 @@ const BoardReference = ({
       updatedSearchParams = { ...searchParams, [`${param}`]: '' };
     }
     setMoveLoader(true);
-    setGameRefLoader(true);
+    setLoader('gameRefLoader');
     setReference(fen, updatedSearchParams);
     setGameReference(false, updatedSearchParams);
   };
@@ -84,7 +88,7 @@ const BoardReference = ({
     let newPlayers = searchParams[param];
     let updatedSearchParams = { ...searchParams, [`${param}`]: newPlayers };
     setMoveLoader(true);
-    setGameRefLoader(true);
+    setLoader('gameRefLoader');
     setReference(fen, updatedSearchParams);
     setGameReference(false, updatedSearchParams);
   };
@@ -110,8 +114,42 @@ const BoardReference = ({
   return (
     <div>
       <div className="search-reference-section d-flex flex-row justify-content-between">
-        <div id="quickSearch" className="quick-search">
-          <div id="quickSearchInput" className="d-flex flex-row">
+        <BrowserView>
+          <div id="quickSearch" className="quick-search">
+            <div id="quickSearchInput" className="d-flex flex-row">
+              <img
+                src={require('../../../public/assets/images/pgn-viewer/reference-inactive.svg')}
+                className="quick-search-img"
+                width={24}
+                height={24}
+                alt=""
+              />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search by name..."
+                value={playerSearchInput}
+                onChange={playerSearchInputHandler}
+              />
+            </div>
+            {playersData.length > 0 && showPlayersList ? (
+              <PlayersList
+                playersData={playersData}
+                setPlayerSearchInput={setPlayerSearchInput}
+                setMobileViewModal={setMobileViewModal}
+              />
+            ) : (
+              <></>
+            )}
+          </div>
+        </BrowserView>
+        <MobileView>
+          <button
+            onClick={() => {
+              setMobileViewModal(true);
+            }}
+            style={{ border: 'none' }}
+          >
             <img
               src={require('../../../public/assets/images/pgn-viewer/reference-inactive.svg')}
               className="quick-search-img"
@@ -119,23 +157,68 @@ const BoardReference = ({
               height={24}
               alt=""
             />
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Search by name..."
-              value={playerSearchInput}
-              onChange={playerSearchInputHandler}
-            />
-          </div>
-          {playersData.length > 0 && showPlayersList ? (
-            <PlayersList
-              playersData={playersData}
-              setPlayerSearchInput={setPlayerSearchInput}
-            />
-          ) : (
-            <></>
-          )}
-        </div>
+          </button>
+          <Modal
+            show={mobileViewModal}
+            onHide={() => {
+              setMobileViewModal(false);
+            }}
+            keyboard={true}
+            backdrop="static"
+            aria-labelledby="contained-modal-title-vcenter"
+            centered
+          >
+            <div className="d-flex flex-row justify-content-end">
+              <button
+                className="modal-close rav-opt-close mt-3 mr-1"
+                type="button"
+                onClick={() => {
+                  setMobileViewModal(false);
+                }}
+              >
+                <img
+                  src={require('../../../public/assets/images/pgn-viewer/close-mark.svg')}
+                  width="20"
+                  height="20"
+                  alt=""
+                />
+              </button>
+            </div>
+            <div
+              className={`quick-search quick-search-mob ${
+                playersData.length > 0 && showPlayersList
+                  ? 'quick-search-mobile'
+                  : ''
+              }`}
+            >
+              <div id="quickSearchInput" className="d-flex flex-row">
+                <img
+                  src={require('../../../public/assets/images/pgn-viewer/reference-inactive.svg')}
+                  className="quick-search-img"
+                  width={24}
+                  height={24}
+                  alt=""
+                />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search by name..."
+                  value={playerSearchInput}
+                  onChange={playerSearchInputHandler}
+                />
+              </div>
+              {playersData.length > 0 && showPlayersList ? (
+                <PlayersList
+                  playersData={playersData}
+                  setPlayerSearchInput={setPlayerSearchInput}
+                  setMobileViewModal={setMobileViewModal}
+                />
+              ) : (
+                <></>
+              )}
+            </div>
+          </Modal>
+        </MobileView>
         <div className="d-flex flex-row">
           <ul className="d-flex flex-wrap">
             {searchParams
@@ -145,7 +228,8 @@ const BoardReference = ({
                       searchParams[key].length &&
                       key !== 'order' &&
                       key !== 'order_by') ||
-                    (searchParams[key] && key === 'ignoreColor') ? (
+                    (searchParams[key] &&
+                      (key === 'ignoreColor' || key === 'ignoreBlitzRapid')) ? (
                     key.includes('Player') ? (
                       searchParams[key].map((player) => {
                         return (
@@ -220,7 +304,6 @@ const BoardReference = ({
         </div>
       </div>
       <GameReference
-        setActiveTab={setActiveTab}
         tourStepNumber={tourStepNumber}
         tourType={tourType}
       />
@@ -239,6 +322,6 @@ export default connect(mapStateToProps, {
   setReference,
   setGameReference,
   setMoveLoader,
-  setGameRefLoader,
+  setLoader,
   setTourNextStep,
 })(BoardReference);

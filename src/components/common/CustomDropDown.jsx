@@ -28,11 +28,11 @@ class CustomDropDown extends React.PureComponent {
 
   selectItem = (e, item, engineName) => {
     const { handelCoreChange } = this.props;
-    const coreIndex = parseInt(e.currentTarget.dataset.indexNumber, 10);
+    const index = parseInt(e.currentTarget.dataset.indexNumber, 10);
     this.setState({
       showItems: false,
     });
-    handelCoreChange(coreIndex, engineName);
+    handelCoreChange(index, engineName);
   };
 
   selectOptionItem = (optioName, engineName, type) => {
@@ -50,20 +50,20 @@ class CustomDropDown extends React.PureComponent {
       });
     }
   };
-
   render() {
     const {
       coreIndex,
       items,
       engineName,
-      userFullInfo,
+      plans,
       type,
       engineNameStyleClassName,
+      isGuestUser,
     } = this.props;
 
     return (
       <div className="select-box--box" ref={this.wrapperRef}>
-        <div className="select-box--container d-flext">
+        <div className="select-box--container d-flex">
           <div
             className={`select-box--selected-item ${engineNameStyleClassName}`}
             onClick={this.dropDown}
@@ -71,9 +71,11 @@ class CustomDropDown extends React.PureComponent {
             {type === 'cores'
               ? coreToKNode(
                   null,
-                  items[coreIndex[engineName]].cores,
+                  items.length <= coreIndex[engineName]
+                    ? items[0]
+                    : items[coreIndex[engineName]],
                   engineName
-                ).caption
+                )
               : items[0]}
           </div>
           <div className="select-box--arrow" onClick={this.dropDown}>
@@ -99,7 +101,12 @@ class CustomDropDown extends React.PureComponent {
                   <div
                     key={index}
                     onClick={(e) => {
-                      if (!disabledEngineCore(userFullInfo, item.cores)) {
+                      if (isGuestUser) {
+                        e.preventDefault();
+                        this.props.setLoginModal(true);
+                        return;
+                      }
+                      if (!disabledEngineCore(plans, item)) {
                         e.preventDefault();
                         this.props.setOpenCoinsModal(true);
                       } else {
@@ -107,14 +114,12 @@ class CustomDropDown extends React.PureComponent {
                       }
                     }}
                     className={
-                      disabledEngineCore(userFullInfo, item.cores)
-                        ? ''
-                        : 'disabled-item'
+                      disabledEngineCore(plans, item) ? '' : 'disabled-item'
                     }
                     data-index-number={index}
                     name={engineName}
                   >
-                    {coreToKNode(null, item.cores, engineName).caption}
+                    {coreToKNode(null, item, engineName)}
                   </div>
                 ))
               : items.map((item, index) => {

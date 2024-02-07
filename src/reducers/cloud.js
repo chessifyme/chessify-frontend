@@ -15,12 +15,23 @@ const initialState = {
     berserk: 3,
     koivisto: 3,
     rubichess: 3,
+    shashchess: 3,
+    komodo: 3,
   },
-  userFullInfo: {}, // User full information from backend
-  orderedCores: {}, // Core value successful server order
+  userInfo: {}, //User acconut information from backend
+  serverInfo: {}, //servers information from backend
+  notification: {}, //notification information from backend
+  plans: {}, //plans information from backend
   savedAnalyzeInfo: null, // The latest analysis info is saved in session storage
   mType: '',
   pauseAnalysisUpdate: false,
+  computedMoveScores: [],
+  fullAnalysisOn: false,
+  fenArr: [],
+  fullAnalysisDepth: 20,
+  initiateFullAnalysis: false,
+  isColorSwitched: false,
+  isGuestUser: false,
 };
 
 function cloudReducer(state = initialState, action) {
@@ -59,7 +70,12 @@ function cloudReducer(state = initialState, action) {
       };
     }
     case CLOUD_ACTION_TYPES.SET_PRO_ANALYZERS: {
-      return { ...state, proAnalyzers: action.payload.proAnalyzers };
+      return {
+        ...state,
+        proAnalyzers: action.payload.proAnalyzers,
+        fullAnalysisOn: action.payload.fullAnalysisOn,
+        computedMoveScores: action.payload.computedMoveScores,
+      };
     }
 
     case CLOUD_ACTION_TYPES.UPDATE_NUM_PV: {
@@ -75,12 +91,19 @@ function cloudReducer(state = initialState, action) {
         numPV: action.payload.numPV,
       };
     }
-    case CLOUD_ACTION_TYPES.GET_USER_FULL_INFO: {
-      return { ...state, userFullInfo: action.payload.userData };
+    case CLOUD_ACTION_TYPES.GET_USER_INFO: {
+      return { ...state, userInfo: action.payload.userInfo };
     }
-    case CLOUD_ACTION_TYPES.SET_ORDERED_CORES: {
-      return { ...state, orderedCores: action.payload.orderedCores };
+    case CLOUD_ACTION_TYPES.GET_USER_SERVERS_INFO: {
+      return { ...state, serverInfo: action.payload.serverInfo };
     }
+    case CLOUD_ACTION_TYPES.GET_USER_NOTIFICATION_INFO: {
+      return { ...state, notification: action.payload.notification };
+    }
+    case CLOUD_ACTION_TYPES.GET_USER_PLANS_INFO: {
+      return { ...state, plans: action.payload.plans };
+    }
+
     case CLOUD_ACTION_TYPES.SET_SAVED_ANALYZE_INFO: {
       return { ...state, savedAnalyzeInfo: action.payload.analyzeInfo };
     }
@@ -93,10 +116,52 @@ function cloudReducer(state = initialState, action) {
         pauseAnalysisUpdate: action.payload.pauseAnalysisUpdate,
       };
     }
+    case CLOUD_ACTION_TYPES.SET_COMPUTED_DATA: {
+      console.log('COMPUTED DATA: ', action.payload.computedMoveScores);
+      return {
+        ...state,
+        computedMoveScores: action.payload.computedMoveScores,
+      };
+    }
+
+    case CLOUD_ACTION_TYPES.SET_FULL_ANALYSIS_ON: {
+      return { ...state, fullAnalysisOn: action.payload.fullAnalysisOn };
+    }
+
+    case CLOUD_ACTION_TYPES.SET_FULL_GAME_FEN_ARR: {
+      return { ...state, fenArr: action.payload.fenArr };
+    }
+
+    case CLOUD_ACTION_TYPES.SET_FULL_ANALYSIS_DEPTH: {
+      return { ...state, fullAnalysisDepth: action.payload.fullAnalysisDepth };
+    }
+
+    case CLOUD_ACTION_TYPES.SET_INITIATE_FULL_ANALYSIS: {
+      return {
+        ...state,
+        initiateFullAnalysis: action.payload.initiateFullAnalysis,
+      };
+    }
+
+    case CLOUD_ACTION_TYPES.SWITCH_ANALYSIS_COLOR: {
+      return {
+        ...state,
+        isColorSwitched: action.payload.isColorSwitched,
+      };
+    }
+
+    case CLOUD_ACTION_TYPES.SET_IS_GUEST_USER: {
+      return {
+        ...state,
+        isGuestUser: action.payload.isGuestUser,
+      };
+    }
+
     default: {
       // console.warn('Unhandled or System action fired: ', action.type);
     }
   }
+
   return state;
 }
 

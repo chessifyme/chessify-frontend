@@ -741,6 +741,216 @@ main.page-small {
   --cg-cs: none;
 }
 
+.blue .is2d cg-board {
+  background-image: url("../images/board/boards/svg/blue.svg")
+}
+
+.blue .is2d coords {
+  --cg-ccw: #dee3e6;
+  --cg-ccb: #788a94;
+  --cg-cs: none
+}
+
+.blue2 .is2d cg-board {
+  background-image: url("../images/board/boards/blue2.jpg")
+}
+
+.blue2 .is2d coords {
+  --cg-ccw: #97b2c7;
+  --cg-ccb: #546f82;
+  --cg-cs: none
+}
+
+.blue3 .is2d cg-board {
+  background-image: url("../images/board/boards/blue3.jpg")
+}
+
+.blue3 .is2d coords {
+  --cg-ccw: #d9e0e6;
+  --cg-ccb: #315991;
+  --cg-cs: none
+}
+
+.blue-marble .is2d cg-board {
+  background-image: url("../images/board/boards/blue-marble.jpg")
+}
+
+.blue-marble .is2d coords {
+  --cg-ccw: #eae6dd;
+  --cg-ccb: #7c7f87;
+  --cg-cs: none
+}
+
+.canvas .is2d cg-board {
+  background-image: url("../images/board/boards/canvas2.jpg")
+}
+
+.canvas .is2d coords {
+  --cg-ccw: #d7daeb;
+  --cg-ccb: #547388;
+  --cg-cs: none
+}
+
+.wood .is2d cg-board {
+  background-image: url("../images/board/boards/wood.jpg")
+}
+
+.wood .is2d coords {
+  --cg-ccw: #d8a45b;
+  --cg-ccb: #9b4d0f;
+  --cg-cs: none
+}
+
+.wood2 .is2d cg-board {
+  background-image: url("../images/board/boards/wood2.jpg")
+}
+
+.wood2 .is2d coords {
+  --cg-ccw: #a38b5d;
+  --cg-ccb: #6c5017;
+  --cg-cs: none
+}
+
+.wood3 .is2d cg-board {
+  background-image: url("../images/board/boards/wood3.jpg")
+}
+
+.wood3 .is2d coords {
+  --cg-ccw: #d0ceca;
+  --cg-ccb: #755839;
+  --cg-cs: none
+}
+
+.maple .is2d cg-board {
+  background-image: url("../images/board/boards/maple.jpg")
+}
+
+.maple .is2d coords {
+  --cg-ccw: #e8ceab;
+  --cg-ccb: #bc7944;
+  --cg-cs: none
+}
+
+.maple2 .is2d cg-board {
+  background-image: url("../images/board/boards/maple2.jpg")
+}
+
+.maple2 .is2d coords {
+  --cg-ccw: #e2c89f;
+  --cg-ccb: #996633;
+  --cg-cs: none
+}
+
+.leather .is2d cg-board {
+  background-image: url("../images/board/boards/leather.jpg")
+}
+
+.leather .is2d coords {
+  --cg-ccw: #d1d1c9;
+  --cg-ccb: #c28e16;
+  --cg-cs: none
+}
+
+.green .is2d cg-board {
+  background-image: url("../images/board/boards/svg/green.svg")
+}
+
+.green .is2d coords {
+  --cg-ccw: #ffffdd;
+  --cg-ccb: #6d8753;
+  --cg-cs: none
+}
+
+.pink .is2d cg-board {
+  background-image: url("../images/board/boards/pink-pyramid.png")
+}
+
+.pink .is2d coords {
+  --cg-ccw: #e8e9b7;
+  --cg-ccb: #ed7272;
+  --cg-cs: none
+}
+
+.marble .is2d cg-board {
+  background-image: url("../images/board/boards/marble.jpg")
+}
+
+.marble .is2d coords {
+  --cg-ccw: #93ab91;
+  --cg-ccb: #4f644e;
+  --cg-cs: none
+}
+
+.green-plastic .is2d cg-board {
+  background-image: url("../images/board/boards/green-plastic.png")
+}
+
+.green-plastic .is2d coords {
+  --cg-ccw: #f2f9bb;
+  --cg-ccb: #59935d;
+  --cg-cs: none
+}
+
+.grey .is2d cg-board {
+  background-image: url("../images/board/boards/grey.jpg")
+}
+
+.grey .is2d coords {
+  --cg-ccw: #b8b8b8;
+  --cg-ccb: #7d7d7d;
+  --cg-cs: none
+}
+
+.metal .is2d cg-board {
+  background-image: url("../images/board/boards/metal.jpg")
+}
+
+.metal .is2d coords {
+  --cg-ccw: #c9c9c9;
+  --cg-ccb: #727272;
+  --cg-cs: none
+}
+
+.olive .is2d cg-board {
+  background-image: url("../images/board/boards/olive.jpg")
+}
+
+.olive .is2d coords {
+  --cg-ccw: #b8b19f;
+  --cg-ccb: #6d6655;
+  --cg-cs: none
+}
+
+.newspaper .is2d cg-board {
+  background-image: url("../images/board/boards/newspaper.png")
+}
+
+.newspaper .is2d coords {
+  --cg-ccw: #fff;
+  --cg-ccb: #8d8d8d;
+  --cg-cs: none
+}
+
+.purple-diag .is2d cg-board {
+  background-image: url("../images/board/boards/purple-diag.png")
+}
+
+.purple-diag .is2d coords {
+  --cg-ccw: #e5daf0;
+  --cg-ccb: #957ab0;
+  --cg-cs: none
+}
+
+.horsey .is2d cg-board {
+  background-image: url("../images/board/boards/horsey.jpg")
+}
+
+.horsey .is2d coords {
+  --cg-ccw: #f0d9b5;
+  --cg-ccb: #946f51;
+  --cg-cs: none
+}
+
 cg-board {
   top: 0;
   left: 0;

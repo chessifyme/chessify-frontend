@@ -11,16 +11,18 @@ const mapStateToProps = (state) => {
     referenceData: state.board.referenceData,
     searchParams: state.board.searchParams,
     moveLoader: state.board.moveLoader,
-    userFullInfo: state.cloud.userFullInfo,
+    plans: state.cloud.plans,
+    isGuestUser: state.cloud.isGuestUser,
   };
 };
 
 const MoveReference = ({
   referenceData,
-  userFullInfo,
+  plans,
   moveLoader,
   doMove,
   setSubModal,
+  isGuestUser,
 }) => {
   const handleMoveReferenceClick = (move, doMove) => {
     let splitMove = move.split('.');
@@ -29,26 +31,38 @@ const MoveReference = ({
     doMove(move);
   };
 
-  const subToSee = (
+  const subToSee = !isGuestUser ? (
     <button
       className="apply-btn"
-      onClick={() => {
+      onClick={(event) => {
+        event.stopPropagation();
         setSubModal('reference');
       }}
     >
       Subscribe
     </button>
+  ) : (
+    <button
+      className="apply-btn"
+      onClick={(event) => {
+        event.stopPropagation();
+        window.location.href = '/auth/signin';
+      }}
+    >
+      Log In to See
+    </button>
   );
-  
+
   return (
     <div className="scroll mv-ref-table">
       <Table hover id="moveReference">
         <thead>
           <tr>
-            <th className='sm-mv-ref-row'>Move</th>
+            <th className="sm-mv-ref-row">Move</th>
             <th
               className={
-                userFullInfo.subscription &&
+                plans &&
+                plans.subscription &&
                 referenceData &&
                 referenceData.statistics &&
                 referenceData.statistics[0] &&
@@ -62,7 +76,8 @@ const MoveReference = ({
             <th>Score</th>
             <th
               className={
-                userFullInfo.subscription &&
+                plans &&
+                plans.subscription &&
                 referenceData &&
                 referenceData.statistics &&
                 referenceData.statistics[0] &&
@@ -102,28 +117,49 @@ const MoveReference = ({
                     handleMoveReferenceClick(move.move, doMove);
                   }}
                 >
-                  <td className='sm-mv-ref-row'>
+                  <td className="sm-mv-ref-row">
                     <b>{move.move}</b>
                   </td>
                   <td>
-                    {!move.games_count && !userFullInfo.subscription
+                    {(!move.games_count &&
+                      (!plans || (plans && !plans.subscription))) ||
+                    isGuestUser
                       ? subToSee
                       : move.games_count}
                   </td>
-                  <td>{move.result[0]}</td>
+                  <td>{move.result[0] + move.result[2]}</td>
                   <td>
-                    {!move.avg_rating && !userFullInfo.subscription
+                    {(!move.avg_rating &&
+                      (!plans || (plans && !plans.subscription))) ||
+                    isGuestUser
                       ? subToSee
                       : move.avg_rating}
                   </td>
                   <td className="percent-mv-ref">
-                    {isNaN(
-                      Math.floor((move.result[0] / move.games_count) * 100)
-                    ) && !userFullInfo.subscription
+                    {(isNaN(
+                      Math.floor(
+                        ((move.result[0] + move.result[2]) / move.games_count) *
+                          100
+                      )
+                    ) &&
+                      (!plans || (plans && !plans.subscription))) ||
+                    isGuestUser
                       ? subToSee
-                      : Math.floor((move.result[0] / move.games_count) * 100)}
+                      : Math.floor(
+                          ((move.result[0] + move.result[2]) /
+                            move.games_count) *
+                            100
+                        )}
                   </td>
-                  <td>{move.last_date.replaceAll('-', '/')}</td>
+                  <td>
+                    {move.last_date &&
+                    (typeof move.last_date === 'string' ||
+                      move.last_date instanceof String) ? (
+                      move.last_date.replaceAll('-', '/')
+                    ) : (
+                      <></>
+                    )}
+                  </td>
                 </tr>
               );
             })

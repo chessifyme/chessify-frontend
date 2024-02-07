@@ -1,24 +1,32 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { connect } from 'react-redux';
-import { ThemeContext } from '../contexts/ThemeContext'
+import { ThemeContext } from '../contexts/ThemeContext';
+import {getUserAccountData} from '../utils/api';
 
-const mapStateToProps = (state) => {
-  return {
-    userFullInfo: state.cloud.userFullInfo,
-  };
-};
+
 
 const getTheme = (mode) => {
-  return  mode ? "dark" : "light";
+    return  mode ? "dark" : "light";
 };
 
-const ThemeProvider = ({ children, userFullInfo }) => {
-  const [ theme, setTheme ] = React.useState(getTheme(userFullInfo.is_dark));
-
-  React.useEffect(() => {
+const ThemeProvider = ({ children }) => {
+  const [ theme, setTheme ] = useState(getTheme(false));
+    
+  useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [ theme ])
 
+  useEffect(()=>{
+    getUserAccountData()
+    .then((userDetaleInfo) => {
+      if(userDetaleInfo){
+      setTheme(getTheme(userDetaleInfo.is_dark))
+      }
+    })
+    .catch((e) => {
+      console.error('USER onModeAccount ERROR======>>>>', e);
+    });
+  }, [])
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>
       {children}
@@ -26,4 +34,4 @@ const ThemeProvider = ({ children, userFullInfo }) => {
   );
 };
 
-export default connect(mapStateToProps, null)(ThemeProvider);
+export default connect(null)(ThemeProvider);

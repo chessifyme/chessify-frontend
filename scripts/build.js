@@ -68,13 +68,13 @@ checkBrowsers(paths.appPath, isInteractive)
         console.log(warnings.join('\n\n'));
         console.log(
           '\nSearch for the ' +
-            chalk.underline(chalk.yellow('keywords')) +
-            ' to learn more about each warning.'
+          chalk.underline(chalk.yellow('keywords')) +
+          ' to learn more about each warning.'
         );
         console.log(
           'To ignore, add ' +
-            chalk.cyan('// eslint-disable-next-line') +
-            ' to the line before.\n'
+          chalk.cyan('// eslint-disable-next-line') +
+          ' to the line before.\n'
         );
       } else {
         console.log(chalk.green('Compiled successfully.\n'));
@@ -165,7 +165,7 @@ function build(previousFileSizes) {
         console.log(
           chalk.yellow(
             '\nTreating warnings as errors because process.env.CI = true.\n' +
-              'Most CI servers set it automatically.\n'
+            'Most CI servers set it automatically.\n'
           )
         );
         return reject(new Error(messages.warnings.join('\n\n')));
@@ -198,4 +198,7 @@ function copyPublicFolder() {
   fs.copySync(srcImgPath, destImgPath, {
     dereference: true,
   });
+  fs.copyFileSync(`${paths.appPublic}/assets/manifest.json`, `${paths.appBuild}/wv-static/manifest.json`);
+  fs.copyFileSync(`${paths.appNodeModules}/@tensorflow/tfjs-tflite/dist/tflite_web_api_cc_simd.js`, `${paths.appBuild}/wv-static/js/tflite_web_api_cc_simd.js`);
+  fs.copyFileSync(`${paths.appNodeModules}/@tensorflow/tfjs-tflite/dist/tflite_web_api_cc_simd.wasm`, `${paths.appBuild}/wv-static/js/tflite_web_api_cc_simd.wasm`);
 }

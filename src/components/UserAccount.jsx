@@ -5,19 +5,23 @@ import PlanDetails from './PlanDetails';
 import PasswordSavedModal from './PasswordSavedModal';
 import ResetPasswordModal from './ResetPasswordModal';
 import { connect } from 'react-redux';
+import { logout } from '../utils/api';
+
 
 const mapStateToProps = (state) => {
   return {
     isSavedPasswordModalOpen: state.userAccount.isSavedPasswordModalOpen,
     isResetPasswordModalOpen: state.userAccount.isResetPasswordModalOpen,
-    userFullInfo: state.cloud.userFullInfo,
+    userInfo: state.cloud.userInfo,
+    plans:state.cloud.plans,
   };
 };
 
 const UserAccount = ({
   isSavedPasswordModalOpen,
   isResetPasswordModalOpen,
-  userFullInfo,
+  userInfo,
+  plans
 }) => {
   const [loading, setLoading] = useState(false);
 
@@ -26,6 +30,7 @@ const UserAccount = ({
     setTimeout(() => {
       setLoading(false);
     }, 2000);
+
   }, []);
 
   return (
@@ -38,19 +43,20 @@ const UserAccount = ({
       {isResetPasswordModalOpen && (
         <ResetPasswordModal
           isResetPasswordModalOpen={isResetPasswordModalOpen}
-          userInfo={userFullInfo}
+          userInfo={userInfo}
         />
       )}
       <article className="user-account">
         <AccountSettings
-          userInfo={userFullInfo}
+          userInfo={userInfo}
           isSavedPasswordModalOpen={isSavedPasswordModalOpen}
           isResetPasswordModalOpen={isResetPasswordModalOpen}
         />
-        <PlanDetails userInfo={userFullInfo} />
+        <PlanDetails plans={plans} />
       </article>
-      <div className="user-account_mob-button">
-        <button className="green-btn user-account_log-out">Log out</button>
+
+      <div className="user-account_mob-button " style={{padding:"0 16px"}}>
+        <button className="green-btn user-account_log-out"  style={{marginTop:"0"}} onClick={logout}>Log out</button>
       </div>
     </div>
   );

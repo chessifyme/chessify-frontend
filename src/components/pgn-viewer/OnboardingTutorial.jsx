@@ -5,6 +5,10 @@ import {
   setTourNextStep,
   setTourNumber,
   setTourType,
+  setCurrentDirectory,
+  deleteFiles,
+  removePgnFromArr,
+
 } from '../../actions/board';
 import { downloadPGN } from '../../utils/chess-utils';
 
@@ -12,6 +16,10 @@ const mapStateToProps = (state) => {
   return {
     tourType: state.board.tourType,
     tourStepNumber: state.board.tourStepNumber,
+    userInfo: state.cloud.userInfo,
+    userUploads: state.board.userUploads,
+    allPgnArr: state.board.allPgnArr,
+
   };
 };
 
@@ -21,6 +29,13 @@ const OnboardingTutorial = ({
   setTourNextStep,
   setTourNumber,
   setTourType,
+  setCurrentDirectory,
+  userInfo,
+  deleteFiles,
+  userUploads,
+  removePgnFromArr,
+  allPgnArr,
+  
 }) => {
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [steps, setSteps] = useState([]);
@@ -45,7 +60,7 @@ const OnboardingTutorial = ({
       },
       {
         selector: '#folderInputName',
-        content: 'Give it a name and hit enter',
+        content: 'Give it a name and click create',
         position: 'right',
       },
       {
@@ -121,6 +136,11 @@ const OnboardingTutorial = ({
         position: 'left',
       },
       {
+        selector: '#ignoreBlitzRapid',
+        content: 'Check this box to remove blitz and repid games',
+        position: 'left',
+      },
+      {
         selector: '#searchFilterBtn',
         content: 'Click “Search” after you add the needed details',
         position: 'left',
@@ -138,12 +158,23 @@ const OnboardingTutorial = ({
   }, [tourType]);
 
   useEffect(() => {
-    console.log('NEXT STEP', tourStepNumber);
   }, [tourStepNumber]);
 
   const closeTour = () => {
     setIsTourOpen(false);
     if (tourType.length) {
+      if(tourType === 'analyze'){
+        setCurrentDirectory('/');
+        if (tourStepNumber > 2) {
+          if(allPgnArr.length === 2){
+            removePgnFromArr(allPgnArr.length-1);
+          }
+          deleteFiles( [], Object.keys(userUploads), userInfo).then(() => {
+          })
+        
+        
+        }
+      }
       setTourNumber(-1);
       setTourType('');
     }
@@ -165,6 +196,7 @@ const OnboardingTutorial = ({
       closeWithMask={false}
       scrollSmooth={true}
       inViewThreshold={0}
+      startAt={0}
     />
   );
 };
@@ -173,4 +205,7 @@ export default connect(mapStateToProps, {
   setTourNextStep,
   setTourNumber,
   setTourType,
+  setCurrentDirectory,
+  deleteFiles,
+  removePgnFromArr
 })(OnboardingTutorial);

@@ -1,7 +1,11 @@
 import Chess from 'chess.js';
 import pgnParser from 'pgn-parser';
 import BOARD_ACTION_TYPES from '../constants/board-action-types';
-import BOARD_PARAMS from '../constants/board-params';
+import BOARD_PARAMS, {
+  INITIAL_FEN,
+  LICHESS_DB_PARAMS,
+  LICHESS_DB_PLAYER_PARAMS,
+} from '../constants/board-params';
 import {
   modifyMoves,
   getMovesLine,
@@ -24,9 +28,22 @@ import {
   addScoreToPgnStr,
   fixPgnStrCommentPosition,
   getLinePgn,
+  applyFullAnalysisResult,
+  addCommandToMV,
+  addCommandActiveMove,
+  findMove,
+  setPgnHeader,
+  getPgnMainComments,
 } from '../utils/pgn-viewer';
 import { setActiveMove } from '../actions/board';
 import { CLOUD_URL } from '../constants/cloud-params';
+import { findFenMatches } from '../utils/chess-utils';
+import {
+  getChessAIResponse,
+  getLichessDB,
+  getLichessDBPlayer,
+} from '../utils/api';
+import { cloneDeep } from 'lodash';
 
 export function boardMiddleware({ getState, dispatch }) {
   const chess = new Chess();
@@ -100,13 +117,26 @@ export function boardMiddleware({ getState, dispatch }) {
         ////
         case BOARD_ACTION_TYPES.SET_PGN: {
           try {
-            let pgn = action.payload.pgn.trimEnd();
+            let pgn = action.payload.pgn.trim();
             pgn = addScoreToPgnStr(pgn);
             pgn = fixPgnStrCommentPosition(pgn);
             const parsedPGN = pgnParser.parse(pgn);
             console.log('PARSED PGN: ', parsedPGN);
             // ADDING layer AND prevMove in each move
             modifyMoves(parsedPGN[0].moves);
+
+            let ePgnValue = '';
+
+            if (parsedPGN[0].headers && parsedPGN[0].headers.length) {
+              let ePgn = parsedPGN[0].headers.filter(
+                (e) => e.name === 'ePGN' || e.name === 'ePgn'
+              );
+              if (ePgn[0] && ePgn[0].value && ePgn[0].value.length) {
+                ePgnValue = ePgn[0].value;
+                pgn = pgn.replace(`[ePGN "${ePgnValue}"]`, '').trim();
+              }
+            }
+
             const isSet = chess.load_pgn(pgn, { sloppy: true });
 
             if (!isSet)
@@ -117,8 +147,8 @@ export function boardMiddleware({ getState, dispatch }) {
               .find((m) => m.layer === 0);
 
             pgn = addScorePGN(pgn, chess);
-
-            action.payload.pgnStr = pgn;
+            action.payload.pgnStr =
+              (ePgnValue.length ? `[ePGN "${ePgnValue}"]\n` : '') + pgn;
             action.payload.pgn = parsedPGN[0];
             action.payload.fen = chess.fen();
             action.payload.activeMove = lastMainMove;
@@ -151,7 +181,10 @@ export function boardMiddleware({ getState, dispatch }) {
             const fenObj = chess.fen().split(' ');
             const move_number = parseInt(fenObj[fenObj.length - 1]);
             const mv = chess.move(action.payload.move);
-            if (!mv) throw new Error(`Invalid move: ${action.payload.move}`);
+            if (!mv)
+              throw new Error(
+                `Invalid move: ${action.payload.move} \n FEN: ${chess.fen()}`
+              );
 
             const boardState = getState().board;
             const { pgn, activeMove, pgnStr } = boardState;
@@ -164,19 +197,18 @@ export function boardMiddleware({ getState, dispatch }) {
 
             const curMoves = pgn.moves ? pgn.moves : [];
             const curHeader = pgn.headers ? pgn.headers : [];
+            const curComments = getPgnMainComments(pgn.comments);
 
             const newActiveMove = addMove(curMoves, activeMove, moveToAdd);
 
             const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
-            const pgnStrNew = pgnHeader + getPgnString(curMoves);
-
+            const pgnStrNew = pgnHeader + curComments + getPgnString(curMoves);
             action.payload.variationOpt =
               newActiveMove.prev_move &&
               newActiveMove.layer !== newActiveMove.prev_move.layer &&
               pgnStr !== pgnStrNew;
 
             const nextMove = findNextMove(newActiveMove, pgn);
-
             action.payload.nextMove = nextMove;
 
             console.log('PGN STRING: ', pgnStrNew);
@@ -200,6 +232,7 @@ export function boardMiddleware({ getState, dispatch }) {
         case BOARD_ACTION_TYPES.SET_ACTIVE_MOVE: {
           try {
             const activeMove = action.payload.activeMove;
+
             if (
               Object.keys(chess.header()).length === 0 &&
               chess.header().constructor === Object
@@ -219,6 +252,7 @@ export function boardMiddleware({ getState, dispatch }) {
                 throw new Error("PGN parsed, but can't load into chess.js");
               }
               const fen = chess.fen();
+
               action.payload.fen = fen;
               break;
             }
@@ -280,7 +314,7 @@ export function boardMiddleware({ getState, dispatch }) {
         case BOARD_ACTION_TYPES.PROMOTE_VARIATION: {
           try {
             let move = action.payload.move;
-            if (!move.move) {
+            if (!move || !move.move) {
               console.log('No selected move');
               return;
             }
@@ -298,13 +332,14 @@ export function boardMiddleware({ getState, dispatch }) {
             const indexedPath = findIndexedPath([pgn], rootVariations);
             console.log('INDEXED PATH: ', indexedPath);
             findLast2MovesOfIndexedPath(pgn, indexedPath);
-            console.log('PROMOTED UPDATED: ', pgn);
+            console.log('UPDATED PROMOTE: ', pgn);
 
             const curHeader = pgn.headers ? pgn.headers : [];
             const curMoves = pgn.moves ? pgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
 
             const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
-            const pgnStr = pgnHeader + getPgnString(curMoves);
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
 
             action.payload.pgn = pgn;
             action.payload.pgnStr = pgnStr;
@@ -345,9 +380,10 @@ export function boardMiddleware({ getState, dispatch }) {
 
             const curHeader = pgn.headers ? pgn.headers : [];
             const curMoves = pgn.moves ? pgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
 
             const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
-            const pgnStr = pgnHeader + getPgnString(curMoves);
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
 
             const activeMove = move;
 
@@ -364,8 +400,15 @@ export function boardMiddleware({ getState, dispatch }) {
 
             const isSet = chess.load_pgn(movesStr, { sloppy: true });
 
-            if (!isSet)
+            if (!isSet && pgn.headers) {
+              pgn.headers.forEach((head) => {
+                if (head.name === 'FEN') {
+                  chess.load(head.value);
+                }
+              });
+            } else if (!isSet) {
               throw new Error("PGN parsed, but can't load into chess.js");
+            }
 
             const fen = chess.fen();
 
@@ -410,15 +453,15 @@ export function boardMiddleware({ getState, dispatch }) {
 
             const curHeader = pgn.headers ? pgn.headers : [];
             const curMoves = pgn.moves ? pgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
 
             const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
-            const pgnStr = pgnHeader + getPgnString(curMoves);
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
 
             const activeMove = parentMove;
 
             const moves = [];
             getMovesLine({ ...activeMove }, moves);
-
             let movesStr = '';
             moves.forEach(
               (mv) =>
@@ -428,10 +471,18 @@ export function boardMiddleware({ getState, dispatch }) {
             );
             const isSet = chess.load_pgn(movesStr, { sloppy: true });
 
-            if (!isSet)
+            if (!isSet && pgn.headers) {
+              pgn.headers.forEach((head) => {
+                if (head.name === 'FEN') {
+                  chess.load(head.value);
+                }
+              });
+            } else if (!isSet) {
               throw new Error("PGN parsed, but can't load into chess.js");
+            }
 
             const fen = chess.fen();
+
             const nextMove = findNextMove(move, pgn);
 
             action.payload.fen = fen;
@@ -467,9 +518,10 @@ export function boardMiddleware({ getState, dispatch }) {
 
             const curHeader = pgn.headers ? pgn.headers : [];
             const curMoves = pgn.moves ? pgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
 
             const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
-            const pgnStr = pgnHeader + getPgnString(curMoves);
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
 
             chess.load_pgn(pgnStr, { sloppy: true });
             const fen = chess.fen();
@@ -512,9 +564,10 @@ export function boardMiddleware({ getState, dispatch }) {
             addNagInPgn(pgn, indexedPath, nag);
             const curHeader = pgn.headers ? pgn.headers : [];
             const curMoves = pgn.moves ? pgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
 
             const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
-            const pgnStr = pgnHeader + getPgnString(curMoves);
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
 
             action.payload.pgn = pgn;
             action.payload.pgnStr = pgnStr;
@@ -554,9 +607,10 @@ export function boardMiddleware({ getState, dispatch }) {
 
             const curHeader = pgn.headers ? pgn.headers : [];
             const curMoves = pgn.moves ? pgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
 
             const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
-            const pgnStr = pgnHeader + getPgnString(curMoves);
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
 
             action.payload.pgn = pgn;
             action.payload.pgnStr = pgnStr;
@@ -595,9 +649,10 @@ export function boardMiddleware({ getState, dispatch }) {
 
             const curHeader = pgn.headers ? pgn.headers : [];
             const curMoves = pgn.moves ? pgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
 
             const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
-            const pgnStr = pgnHeader + getPgnString(curMoves);
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
 
             action.payload.pgn = pgn;
             action.payload.pgnStr = pgnStr;
@@ -615,13 +670,14 @@ export function boardMiddleware({ getState, dispatch }) {
           try {
             let move = action.payload.move;
             const comment = action.payload.comment;
+            const commentIndx = action.payload.commentIndx;
 
             if (!move.move) {
               console.log('No move');
               return;
             }
 
-            if (!comment.length) {
+            if (!comment.length && commentIndx === null) {
               console.log('No text to add');
               return;
             }
@@ -633,13 +689,14 @@ export function boardMiddleware({ getState, dispatch }) {
             rootVariations.push(move.move_id);
             const indexedPath = findIndexedPath([pgn], rootVariations);
 
-            addCommentToMV(pgn, indexedPath, comment);
+            addCommentToMV(pgn, indexedPath, comment, commentIndx);
 
             const curHeader = pgn.headers ? pgn.headers : [];
             const curMoves = pgn.moves ? pgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
 
             const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
-            const pgnStr = pgnHeader + getPgnString(curMoves);
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
 
             action.payload.pgn = pgn;
             action.payload.pgnStr = pgnStr;
@@ -649,6 +706,103 @@ export function boardMiddleware({ getState, dispatch }) {
             return dispatch({
               type: 'ADDING_MV_COMMENT_FAILED',
               payload: { message: 'Adding move comment failed' },
+            });
+          }
+        }
+
+        case BOARD_ACTION_TYPES.ADD_COMMAND_TO_MOVE: {
+          try {
+            let move = action.payload.move;
+            const command = action.payload.command;
+
+            if (!move.move) {
+              console.log('No move');
+              return;
+            }
+
+            if (
+              Object.keys(command).length === 0 &&
+              command.constructor === Object
+            ) {
+              console.log('No command to add');
+              return;
+            }
+
+            const boardState = getState().board;
+            let { pgn } = boardState;
+
+            let rootVariations = findRootVariations(move).reverse();
+            rootVariations.push(move.move_id);
+            const indexedPath = findIndexedPath([pgn], rootVariations);
+
+            addCommandToMV(pgn, indexedPath, command);
+
+            const curHeader = pgn.headers ? pgn.headers : [];
+            const curMoves = pgn.moves ? pgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
+
+            const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
+            action.payload.activeMove = findMove(pgn, indexedPath, false);
+            action.payload.pgn = pgn;
+            action.payload.pgnStr = pgnStr;
+            break;
+          } catch (e) {
+            console.error(e.message);
+            return dispatch({
+              type: 'ADDING_MV_COMMAND_FAILED',
+              payload: { message: 'Adding move command failed' },
+            });
+          }
+        }
+
+        case BOARD_ACTION_TYPES.ADD_COMMAND_TO_HEADER: {
+          try {
+            const command = action.payload.command;
+
+            if (
+              Object.keys(command).length === 0 &&
+              command.constructor === Object
+            ) {
+              console.log('No command to add');
+              return;
+            }
+            const boardState = getState().board;
+            let { pgn } = boardState;
+            if (Object.keys(pgn).length === 0 && pgn.constructor === Object) {
+              const chessN = new Chess();
+              let header = setPgnHeader(chessN.header());
+              chess.load_pgn(
+                header + `{[%${command.key} ${command.values}]} *`
+              );
+              const parsedPGN = pgnParser.parse(chess.pgn() + ' *');
+              console.log('PARSED PGN: ', parsedPGN);
+              // ADDING layer AND prevMove in each move
+              modifyMoves(parsedPGN[0].moves);
+              action.payload.pgn = parsedPGN[0];
+              action.payload.pgnStr =
+                header + `{[%${command.key} ${command.values}]} *`;
+            } else if (pgn.comments || pgn.comments === null) {
+              if (pgn.comments === null) pgn.comments = [];
+
+              addCommandActiveMove(pgn.comments, command, null);
+              const curHeader = pgn.headers ? pgn.headers : [];
+              const curComments = getPgnMainComments(pgn.comments);
+              const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
+              const curMoves =
+                pgn.moves && pgn.moves.length ? getPgnString(pgn.moves) : [];
+              const pgnStrNew = pgnHeader + curComments + curMoves;
+
+              action.payload.pgn = pgn;
+              action.payload.pgnStr = pgnStrNew;
+            }
+
+            break;
+          } catch (e) {
+            console.error(e.message);
+            return dispatch({
+              type: 'ADDING_HEADER_COMMAND_FAILED',
+              payload: { message: 'Adding header command failed' },
             });
           }
         }
@@ -706,7 +860,6 @@ export function boardMiddleware({ getState, dispatch }) {
             async function searchGames() {
               const response = await fetch(url);
               if (!response.ok) {
-                action.payload.gameRefLoader = false;
                 if (
                   loadMore &&
                   referenceGames &&
@@ -757,7 +910,6 @@ export function boardMiddleware({ getState, dispatch }) {
               }
             }
             await searchGames();
-            action.payload.gameRefLoader = false;
             action.payload.searchParams = searchParams;
             action.payload.pageNum = loadMore ? pageNum + 1 : 0;
             break;
@@ -784,20 +936,6 @@ export function boardMiddleware({ getState, dispatch }) {
               payload: {
                 message: 'Failed to set move loader',
               },
-            });
-          }
-        }
-
-        case BOARD_ACTION_TYPES.SET_GAME_REF_LOADER: {
-          try {
-            const gameRefLoader = action.payload.gameRefLoader;
-            action.payload.moveLoader = gameRefLoader;
-            break;
-          } catch (e) {
-            console.error(e);
-            return dispatch({
-              type: 'SETTING_GAME_REF_LOADER_FAILED',
-              payload: { message: 'Failed to set game ref loader' },
             });
           }
         }
@@ -838,6 +976,7 @@ export function boardMiddleware({ getState, dispatch }) {
         case BOARD_ACTION_TYPES.SET_USER_UPLOADS: {
           try {
             const { path, userInfo } = action.payload;
+            if (!userInfo.token) return;
             const token = userInfo.token;
             const boardState = getState().board;
             const { fen, uploadFilterByPos } = boardState;
@@ -981,8 +1120,78 @@ export function boardMiddleware({ getState, dispatch }) {
           } catch (e) {
             console.error(e);
             return dispatch({
-              type: 'SET_CURRENT_DIRECTORY_FAILED',
-              payload: { message: 'Failed to set current directory' },
+              type: 'CREATE_FOLDER_FAILED',
+              payload: { message: 'Failed to create folder' },
+            });
+          }
+        }
+
+        case BOARD_ACTION_TYPES.EDIT_FOLDER_NAME: {
+          try {
+            const { oldName, newName, userInfo } = action.payload;
+            const token = userInfo.token;
+            async function editFolderName(oldName, newName) {
+              const url = `${CLOUD_URL}/user_account/update-folder/`;
+              const data = {};
+              data['old_name'] = oldName;
+              data['new_name'] = newName;
+              const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Token ${token}`,
+                },
+                body: JSON.stringify(data),
+              });
+
+              if (!response.ok) {
+                throw new Error('Something went wrong');
+              }
+
+              return await response.json();
+            }
+            await editFolderName(oldName, newName);
+            break;
+          } catch (e) {
+            console.error(e);
+            return dispatch({
+              type: 'EDIT_FOLDER_NAME_FAILED',
+              payload: { message: 'Failed to edit folder name' },
+            });
+          }
+        }
+
+        case BOARD_ACTION_TYPES.EDIT_FILE_NAME: {
+          try {
+            const { id, newName, userInfo } = action.payload;
+            const token = userInfo.token;
+            async function editFileName(id, newName) {
+              const url = `${CLOUD_URL}/user_account/update-file/`;
+              const data = {};
+              data['id'] = id;
+              data['new_name'] = newName + '.pgn';
+              const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Token ${token}`,
+                },
+                body: JSON.stringify(data),
+              });
+
+              if (!response.ok) {
+                throw new Error('Something went wrong');
+              }
+
+              return await response.json();
+            }
+            await editFileName(id, newName);
+            break;
+          } catch (e) {
+            console.error(e);
+            return dispatch({
+              type: 'EDIT_FILE_NAME_FAILED',
+              payload: { message: 'Failed to edit file name' },
             });
           }
         }
@@ -1091,7 +1300,7 @@ export function boardMiddleware({ getState, dispatch }) {
             let { tourStepNumber, tourType } = boardState;
             tourStepNumber = tourStepNumber === -1 ? 0 : tourStepNumber;
             const isValidAnalyzeStep =
-              tourType === 'analyze' && tourStepNumber < 6;
+              tourType === 'analyze' && tourStepNumber < 7;
             const isValidStudyStep = tourType === 'study' && tourStepNumber < 2;
             const isValidPrepareStep =
               tourType === 'prepare' && tourStepNumber < 6;
@@ -1122,57 +1331,78 @@ export function boardMiddleware({ getState, dispatch }) {
               activePgnTab,
               fen,
               switchedTabAnalyzeFen,
+              uploadFilterByPos,
             } = boardState;
 
             allPgnArr[activePgnTab].tabPgn = pgn;
             allPgnArr[activePgnTab].tabPgnStr = pgnStr;
             allPgnArr[activePgnTab].tabActiveMove = activeMove;
 
-            newTabPgnStr = newTabPgnStr.trimEnd();
-
-            newTabPgnStr = addScoreToPgnStr(newTabPgnStr);
-            newTabPgnStr = fixPgnStrCommentPosition(newTabPgnStr);
-
-            const parsedPGN = pgnParser.parse(newTabPgnStr);
-            console.log('PARSED PGN: ', parsedPGN);
-            // ADDING layer AND prevMove in each move
-            modifyMoves(parsedPGN[0].moves);
-
-            const isSet = chess.load_pgn(newTabPgnStr, { sloppy: true });
-            if (!isSet && parsedPGN[0].headers) {
-              parsedPGN[0].headers.forEach((head) => {
-                if (head.name === 'FEN') {
-                  chess.load(head.value);
-                }
-              });
-            } else if (!isSet) {
-              throw new Error("PGN parsed, but can't load into chess.js");
-            }
-
-            const lastMainMove = [...parsedPGN[0].moves]
-              .reverse()
-              .find((m) => m.layer === 0);
-
-            newTabPgnStr = addScorePGN(newTabPgnStr, chess);
-
             let tabName = 'Notation';
+            let newActiveMove = {};
+            let parsedPGN = [];
+            let newFen = '';
 
-            if (tabFile && tabFile.key) {
+            if (tabFile && tabFile.key && tabFile.previewInfo) {
               tabName = tabFile.key.split('/')[2];
+              newActiveMove = tabFile.previewInfo.activeMove;
+              parsedPGN.push(tabFile.previewInfo.pgn);
+              newFen = tabFile.previewInfo.fen;
+            } else {
+              newTabPgnStr = newTabPgnStr.trimEnd();
+
+              newTabPgnStr = addScoreToPgnStr(newTabPgnStr);
+              newTabPgnStr = fixPgnStrCommentPosition(newTabPgnStr);
+
+              parsedPGN = pgnParser.parse(newTabPgnStr);
+              console.log('PARSED PGN: ', parsedPGN);
+              // ADDING layer AND prevMove in each move
+              modifyMoves(parsedPGN[0].moves);
+
+              const isSet = chess.load_pgn(newTabPgnStr, { sloppy: true });
+              if (!isSet && parsedPGN[0].headers) {
+                parsedPGN[0].headers.forEach((head) => {
+                  if (head.name === 'FEN') {
+                    chess.load(head.value);
+                  }
+                });
+              } else if (!isSet) {
+                throw new Error("PGN parsed, but can't load into chess.js");
+              }
+
+              const lastMainMove = [...parsedPGN[0].moves]
+                .reverse()
+                .find((m) => m.layer === 0);
+
+              newTabPgnStr = addScorePGN(newTabPgnStr, chess);
+
+              newActiveMove = lastMainMove ? lastMainMove : {};
+              newFen = chess.fen();
+
+              if (tabFile && tabFile.key) {
+                tabName = tabFile.key.split('/')[2];
+                if (uploadFilterByPos) {
+                  const allMatchedFens = findFenMatches(fen, parsedPGN[0]);
+                  if (allMatchedFens[0].move) {
+                    newActiveMove = allMatchedFens[0].move;
+                    newFen = allMatchedFens[0].fen;
+                  }
+                }
+              }
             }
 
             allPgnArr.push({
               tabPgn: parsedPGN[0],
               tabPgnStr: newTabPgnStr,
-              tabActiveMove: lastMainMove ? lastMainMove : {},
+              tabActiveMove: newActiveMove,
               tabName: tabName,
               tabFile: tabFile,
             });
 
             action.payload.pgnStr = newTabPgnStr;
             action.payload.pgn = parsedPGN[0];
-            action.payload.fen = chess.fen();
-            action.payload.activeMove = lastMainMove ? lastMainMove : {};
+            action.payload.fen = newFen;
+            action.payload.activeMove = newActiveMove;
             action.payload.allPgnArr = allPgnArr;
             action.payload.activePgnTab = allPgnArr.length - 1;
             action.payload.switchedTabAnalyzeFen =
@@ -1198,10 +1428,12 @@ export function boardMiddleware({ getState, dispatch }) {
               pgn,
               pgnStr,
               analyzingFenTabIndx,
+              navigationGamesTabs,
             } = boardState;
             const isAnalysingTab = removeTabIndx === analyzingFenTabIndx;
 
             allPgnArr.splice(removeTabIndx, 1);
+
             if (activePgnTab === removeTabIndx && allPgnArr.length) {
               const newActiveTab = allPgnArr[removeTabIndx - 1]
                 ? removeTabIndx - 1
@@ -1244,7 +1476,12 @@ export function boardMiddleware({ getState, dispatch }) {
                 action.payload.analyzingFenTabIndx = analyzingFenTabIndx;
               }
 
-              if (!pgn.moves.length && pgn.headers && pgn.headers.length) {
+              if (
+                pgn.moves &&
+                !pgn.moves.length &&
+                pgn.headers &&
+                pgn.headers.length
+              ) {
                 pgn.headers.forEach((head) => {
                   if (head.name === 'FEN') {
                     chess.load(head.value);
@@ -1259,6 +1496,40 @@ export function boardMiddleware({ getState, dispatch }) {
               action.payload.activePgnTab = activePgnTab;
             }
 
+            if (navigationGamesTabs.includes(removeTabIndx)) {
+              navigationGamesTabs.splice(removeTabIndx, 1);
+              navigationGamesTabs.forEach((tab, indx) => {
+                if (tab > removeTabIndx) {
+                  navigationGamesTabs[indx] = tab - 1;
+                }
+              });
+
+              let nextGamesStorage = JSON.parse(
+                sessionStorage.getItem('chessify_next_games')
+              );
+              nextGamesStorage = nextGamesStorage ? nextGamesStorage : [];
+              let exictingIndex = nextGamesStorage.findIndex(
+                (elem) => elem.activeTab === removeTabIndx
+              );
+              if (exictingIndex > -1) {
+                nextGamesStorage.splice(exictingIndex, 1);
+                nextGamesStorage.forEach((game) => {
+                  if (game.activeTab > removeTabIndx) {
+                    game.activeTab = game.activeTab - 1;
+                  }
+                });
+
+                if (nextGamesStorage.length) {
+                  sessionStorage.setItem(
+                    'chessify_next_games',
+                    JSON.stringify(nextGamesStorage)
+                  );
+                } else {
+                  sessionStorage.removeItem('chessify_next_games');
+                }
+              }
+            }
+            action.payload.navigationGamesTabs = navigationGamesTabs;
             action.payload.allPgnArr = allPgnArr;
             break;
           } catch (e) {
@@ -1287,16 +1558,15 @@ export function boardMiddleware({ getState, dispatch }) {
             if (
               newActivePgnTabIndx === 0 &&
               allPgnArr.length === 1 &&
-              !allPgnArr[newActivePgnTabIndx].tabPgnStr.length
+              !allPgnArr[0].tabPgnStr.length
             ) {
-              allPgnArr[newActivePgnTabIndx].tabPgnStr = pgnStr;
-              allPgnArr[newActivePgnTabIndx].tabPgn = pgn;
-              allPgnArr[newActivePgnTabIndx].tabActiveMove = activeMove;
+              allPgnArr[0].tabPgnStr = pgnStr;
+              allPgnArr[0].tabPgn = pgn;
+              allPgnArr[0].tabActiveMove = activeMove;
             }
 
             const newPgnStr = allPgnArr[newActivePgnTabIndx].tabPgnStr;
             const newPgn = allPgnArr[newActivePgnTabIndx].tabPgn;
-
             const isSet = chess.load_pgn(newPgnStr, { sloppy: true });
             if (!isSet && newPgn && newPgn.headers) {
               newPgn.headers.forEach((head) => {
@@ -1380,10 +1650,7 @@ export function boardMiddleware({ getState, dispatch }) {
               tabElem.tabActiveMove = lastMainMove ? lastMainMove : {};
             });
 
-            const cloudState = getState().cloud;
-            const { proAnalyzers, numPV } = cloudState;
-
-            if (analysisNotationTab !== 'null' && proAnalyzers) {
+            if (analysisNotationTab !== 'null') {
               let analysisTabIndx = +analysisNotationTab;
 
               if (
@@ -1399,16 +1666,8 @@ export function boardMiddleware({ getState, dispatch }) {
               } else {
                 chess.load_pgn(allPgnArr[analysisTabIndx].tabPgnStr);
               }
-
-              proAnalyzers.forEach((pa) => {
-                pa.analyzer.send('stop');
-                pa.analyzer.send(
-                  `setoption name MultiPV value ${numPV[pa.name]}`
-                );
-                pa.analyzer.send(`position fen ${chess.fen()}`);
-                pa.analyzer.send('go infinite');
-              });
-              action.payload.switchedTabAnalyzeFen = chess.fen();
+              action.payload.switchedTabAnalyzeFen =
+                analysisTabIndx !== +activePgnTab ? chess.fen() : '';
               action.payload.analyzingFenTabIndx = analysisTabIndx;
             } else {
               action.payload.switchedTabAnalyzeFen = '';
@@ -1439,6 +1698,245 @@ export function boardMiddleware({ getState, dispatch }) {
             return dispatch({
               type: 'SET_ACTIVE_PGN_TAB',
               payload: { message: 'Failed to set active pgn tab' },
+            });
+          }
+        }
+
+        case BOARD_ACTION_TYPES.APPLY_FULL_ANALYSIS_ON_PGN: {
+          try {
+            const boardState = getState().board;
+            const cloudState = getState().cloud;
+            let { pgn } = boardState;
+            let { computedMoveScores } = cloudState;
+
+            let newPgn = applyFullAnalysisResult(pgn, computedMoveScores);
+
+            const curHeader = newPgn.headers ? newPgn.headers : [];
+            const curMoves = newPgn.moves ? newPgn.moves : [];
+            const curComments = getPgnMainComments(pgn.comments);
+
+            const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
+            const pgnStr = pgnHeader + curComments + getPgnString(curMoves);
+
+            action.payload.pgn = newPgn;
+            action.payload.pgnStr = pgnStr;
+
+            break;
+          } catch (e) {
+            return dispatch({
+              type: 'APPLY_FULL_ANALYSIS_ON_PGN',
+              payload: { message: 'Failed to apply full analysis on pgn' },
+            });
+          }
+        }
+
+        case BOARD_ACTION_TYPES.SET_LICHESS_DB: {
+          try {
+            const { searchParams, setIsLoading } = action.payload;
+            const boardState = getState().board;
+            let { fen } = boardState;
+            if (searchParams.player && searchParams.player.length) {
+              action.payload.lichessDB = await getLichessDBPlayer(
+                fen,
+                searchParams,
+                setIsLoading
+              );
+              action.payload.searchParamsLichessPlayer = searchParams;
+              action.payload.searchParamsLichess = LICHESS_DB_PARAMS;
+            } else {
+              action.payload.lichessDB = await getLichessDB(fen, searchParams);
+              action.payload.searchParamsLichess = searchParams;
+              action.payload.searchParamsLichessPlayer = LICHESS_DB_PLAYER_PARAMS;
+            }
+            break;
+          } catch (e) {
+            return dispatch({
+              type: 'SET_LICHESS_DB',
+              payload: { message: 'Failed to set lichess db' },
+            });
+          }
+        }
+
+        case BOARD_ACTION_TYPES.SET_CHESS_AI_RESPONSE: {
+          try {
+            const boardState = getState().board;
+            const cloudState = getState().cloud;
+            let { fen, pgnStr, activeMove, pgn } = boardState;
+            let mainPgnStr = pgnStr;
+            if (!activeMove || (pgn && !pgn.moves)) {
+              mainPgnStr = '';
+            } else if (activeMove && Object.keys(activeMove).length !== 0) {
+              let pgnClone = cloneDeep(pgn);
+
+              if (activeMove.layer !== 0) {
+                let rootVariations = findRootVariations(activeMove).reverse();
+                rootVariations.push(activeMove.move_id);
+                let indexedPath = findIndexedPath([pgnClone], rootVariations);
+                while (indexedPath.length >= 2) {
+                  findLast2MovesOfIndexedPath(pgnClone, indexedPath);
+                  indexedPath.pop();
+                }
+              }
+
+              pgnClone.moves.forEach((mv) => {
+                if (mv.ravs) {
+                  delete mv.ravs;
+                }
+              });
+
+              const curHeader = pgnClone.headers ? pgnClone.headers : [];
+              const curMoves = pgnClone.moves ? pgnClone.moves : [];
+              const curComments = getPgnMainComments(pgnClone.comments);
+
+              const pgnHeader = curHeader.length ? getPgnHeader(curHeader) : '';
+              mainPgnStr = pgnHeader + curComments + getPgnString(curMoves);
+            }
+
+            let resp = await getChessAIResponse(
+              fen,
+              mainPgnStr,
+              cloudState.userInfo.token
+            );
+            action.payload.chessAIResponse = resp;
+            break;
+          } catch (e) {
+            return dispatch({
+              type: 'SET_CHESS_AI_RESPONSE',
+              payload: { message: 'Failed to set chess ai response' },
+            });
+          }
+        }
+
+        case BOARD_ACTION_TYPES.SET_NAV_GAMES_INFO: {
+          try {
+            const { indent, reset } = action.payload;
+            const boardState = getState().board;
+            let {
+              navigationGames,
+              searchParams,
+              navigationGameIndx,
+              navigationPages,
+              navigationGamesTabs,
+              activePgnTab,
+            } = boardState;
+            let newIndx = navigationGameIndx + indent - navigationPages[0] * 10;
+            let newNavigationGames = [];
+
+            async function searchGames(pageNum) {
+              let navGamesParams = {
+                whitePlayer: searchParams.whitePlayer,
+                blackPlayer: searchParams.blackPlayer,
+                ignoreColor: searchParams.ignoreColor,
+              };
+              let url = getReferencesUrl(
+                INITIAL_FEN,
+                navGamesParams,
+                'get_games'
+              );
+              url += `&&page=${pageNum}`;
+
+              const response = await fetch(url);
+              if (!response.ok) {
+                return { games: [] };
+              }
+              const refGames = await response.json();
+
+              return refGames;
+            }
+
+            if (reset || (navigationGames && !navigationGames.games)) {
+              const refGames0 = await searchGames(0);
+              const refGames1 = await searchGames(1);
+              newNavigationGames = {
+                games: [...refGames0.games, ...refGames1.games],
+              };
+              action.payload.navigationGames = newNavigationGames;
+              action.payload.navigationGameIndx = -1;
+              action.payload.navigationPages = [0, 1];
+            }
+
+            if (navigationGames && navigationGames.games && newIndx > -1) {
+              if (
+                newIndx < navigationGames.games.length - 1 &&
+                (newIndx > 0 || (newIndx === 0 && navigationPages[0] === 0))
+              ) {
+                newNavigationGames = navigationGames;
+                action.payload.navigationGames = navigationGames;
+                action.payload.navigationGameIndx = navigationGameIndx + indent;
+                action.payload.navigationPages = navigationPages;
+              } else if (newIndx === navigationGames.games.length - 1) {
+                const newPageIndx =
+                  navigationPages[navigationPages.length - 1] + 1;
+
+                navigationGames.games.splice(0, 10);
+                newIndx -= 10;
+                const refGames = await searchGames(newPageIndx);
+                newNavigationGames = {
+                  games: [...navigationGames.games, ...refGames.games],
+                };
+                action.payload.navigationGames = newNavigationGames;
+
+                navigationPages.shift();
+                navigationPages.push(newPageIndx);
+                action.payload.navigationPages = navigationPages;
+                action.payload.navigationGameIndx = navigationGameIndx + indent;
+              } else if (newIndx === 0 && navigationPages[0] !== 0) {
+                const newPageIndx = navigationPages[0] - 1;
+
+                navigationGames.games.splice(10, 10);
+                newIndx += 10;
+                const refGames = await searchGames(newPageIndx);
+                newNavigationGames = {
+                  games: [...refGames.games, ...navigationGames.games],
+                };
+                action.payload.navigationGames = newNavigationGames;
+
+                navigationPages.pop();
+                navigationPages.unshift(newPageIndx);
+                action.payload.navigationPages = navigationPages;
+                action.payload.navigationGameIndx = navigationGameIndx + indent;
+              }
+            }
+
+            if (
+              newIndx >= 0 &&
+              newNavigationGames &&
+              newNavigationGames.games &&
+              newNavigationGames.games.length
+            ) {
+              let nextGamesStorage = JSON.parse(
+                sessionStorage.getItem('chessify_next_games')
+              );
+              nextGamesStorage = nextGamesStorage ? nextGamesStorage : [];
+              let exictingIndex = nextGamesStorage.findIndex(
+                (elem) => elem.activeTab === activePgnTab
+              );
+              if (exictingIndex > -1) {
+                nextGamesStorage[exictingIndex] = {
+                  activeTab: activePgnTab,
+                  game: newNavigationGames.games[newIndx],
+                };
+              } else {
+                nextGamesStorage.push({
+                  activeTab: activePgnTab,
+                  game: newNavigationGames.games[newIndx],
+                });
+              }
+              sessionStorage.setItem(
+                'chessify_next_games',
+                JSON.stringify(nextGamesStorage)
+              );
+              if (!navigationGamesTabs.includes(activePgnTab)) {
+                navigationGamesTabs.push(activePgnTab);
+              }
+            }
+
+            action.payload.navigationGamesTabs = navigationGamesTabs;
+            break;
+          } catch (e) {
+            return dispatch({
+              type: 'SET_NAV_GAMES_INFO',
+              payload: { message: 'Failed to set navigation info' },
             });
           }
         }

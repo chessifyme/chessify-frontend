@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import { connect } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { Modal, Button } from 'react-bootstrap';
-import { downloadPGN } from '../../utils/chess-utils';
+import { downloadPGN, settingHeader } from '../../utils/chess-utils';
 import { addPgnToArr, setFen, setPgn } from '../../actions/board';
 import { setPgnHeader } from '../../utils/pgn-viewer';
+import { RiFileUploadLine } from 'react-icons/ri';
 import Chess from 'chess.js';
-import { MdAddAPhoto } from 'react-icons/md';
 import DropImage from './DropImage';
 
 const mapStateToProps = (state) => {
@@ -14,7 +15,7 @@ const mapStateToProps = (state) => {
     fen: state.board.fen,
     pgnStr: state.board.pgnStr,
     pgn: state.board.pgn,
-    userFullInfo: state.cloud.userFullInfo,
+    isGuestUser: state.cloud.isGuestUser,
   };
 };
 
@@ -24,20 +25,27 @@ const GameFormatsModal = ({
   pgn,
   isOpen,
   handleModal,
-  setActiveTabPgnViewer,
   addPgnToArr,
   setPgn,
   setFen,
-  userFullInfo,
   setScannerImg,
+  isGuestUser,
+  setLoginModal,
 }) => {
   const [newFen, setNewFen] = useState(fen);
   const [newPgn, setNewPgn] = useState(pgnStr);
   const [activeTab, setActiveTab] = useState(0);
+  const navigate = useNavigate();
+
   const chess = new Chess();
 
   useEffect(() => {
-    setNewFen(fen);
+    const identifier = setTimeout(() => {
+      setNewFen(fen);
+    }, 100);
+    return () => {
+      clearTimeout(identifier);
+    };
   }, [fen]);
 
   useEffect(() => {
@@ -52,15 +60,17 @@ const GameFormatsModal = ({
   const copyNotation = () => {
     let notationCopy = activeTab === 1 ? newFen : newPgn;
     if (activeTab === 0) {
+      const regex = /(\n\[\s*FEN\s*((\"\s*\")|(\'\s*\'))\])/gm;
       chess.load_pgn(notationCopy, { sloppy: true });
       let header = setPgnHeader(chess.header());
-      notationCopy = header + (header.length ? '\n' : '') + notationCopy;
+      notationCopy = notationCopy.replace(regex, '');
+      header = header.replace(regex, '');
+      notationCopy = header + notationCopy;
     }
     navigator.clipboard.writeText(notationCopy);
   };
 
   const applyFenHandler = (newFen) => {
-    setActiveTabPgnViewer(0);
     if (!pgn.moves || (pgn.moves && !pgn.moves.length && !pgn.headers)) {
       setFen(newFen);
     } else {
@@ -71,19 +81,50 @@ const GameFormatsModal = ({
       }
       addPgnToArr(chess.pgn(), {});
     }
+    navigate({ pathname: "/analysis"});
     handleCloseModal();
   };
 
   const applyPgnHandler = () => {
-    setActiveTabPgnViewer(0);
     if (!pgn.moves || (pgn.moves && !pgn.moves.length && !pgn.headers)) {
       setPgn(newPgn);
     } else {
       addPgnToArr(newPgn, {});
     }
+    navigate({ pathname: "/analysis"});
     handleCloseModal();
   };
+  const readFiles = (file) => {
+    return new Promise((resolve, reject) => {
+      let reader = new FileReader();
+      reader.onload = () => {
+        resolve(reader.result);
+      };
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
 
+  const uploadFilesHandler = async (files) => {
+    if (isGuestUser) {
+      setLoginModal(true);
+      handleCloseModal();
+      return;
+    }
+    for (let i = 0; i < files.length; i++) {
+      let fileText = await readFiles(files[i]);
+      if (
+        fileText.includes('[Event ') &&
+        fileText.match(/\[Event /g).length > 1
+      ) {
+        fileText = fileText.split('[Event ');
+        let pgnStr = '[Event ' + fileText[1];
+        setNewPgn(pgnStr);
+      } else {
+        setNewPgn(fileText);
+      }
+    }
+  };
   return (
     <Modal
       show={isOpen}
@@ -142,7 +183,22 @@ const GameFormatsModal = ({
                   </Tab>
                 </div>
               </div>
-              <div>
+              <div className="d-flex justify-content-center align-items-center">
+                <label className="upload-btn">
+                  <RiFileUploadLine className="upload-modal-icon" />
+                  <span className="label-name">Upload</span>
+                  <input
+                    type="file"
+                    accept=".pgn"
+                    onChange={(e) => {
+                      uploadFilesHandler(e.target.files);
+                    }}
+                    onClick={(e) => {
+                      e.target.value = null;
+                    }}
+                    hidden
+                  />
+                </label>
                 <button
                   className="game-format-btn copy-btn"
                   onClick={copyNotation}
@@ -153,7 +209,7 @@ const GameFormatsModal = ({
                     height="20"
                     alt=""
                   />
-                  <span>Copy</span>
+                  <span className="label-name">Copy</span>
                 </button>
                 <button
                   className="game-format-btn download-btn"
@@ -165,7 +221,7 @@ const GameFormatsModal = ({
                     height="20"
                     alt=""
                   />
-                  <span>Download</span>
+                  <span className="label-name">Download</span>
                 </button>
               </div>
             </div>
@@ -248,6 +304,8 @@ const GameFormatsModal = ({
               <DropImage
                 handleCloseModal={handleCloseModal}
                 setScannerImg={setScannerImg}
+                isGuestUser={isGuestUser}
+                setLoginModal={setLoginModal}
               />
             </div>
           </TabPanel>

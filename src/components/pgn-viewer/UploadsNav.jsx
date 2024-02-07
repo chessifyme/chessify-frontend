@@ -5,8 +5,8 @@ import {
   RiArrowLeftLine,
   RiDeleteBinFill,
 } from 'react-icons/ri';
+import { MdOutlineDriveFileRenameOutline, MdOutlineSort } from 'react-icons/md';
 import DeleteFilesModal from './DeleteFilesModal';
-import { getPgnFileHeader } from '../../utils/chess-utils';
 import {
   uploadFiles,
   setCurrentDirectory,
@@ -17,7 +17,8 @@ import {
   setUserUploads,
 } from '../../actions/board';
 import { connect } from 'react-redux';
-import { updatePgnTags } from '../../utils/api';
+import EditFolderNameModal from './EditFolderNameModal';
+import { INITIAL_FEN } from '../../constants/board-params';
 
 const mapStateToProps = (state) => {
   return {
@@ -27,6 +28,7 @@ const mapStateToProps = (state) => {
     fen: state.board.fen,
     tourType: state.board.tourType,
     tourStepNumber: state.board.tourStepNumber,
+    isGuestUser: state.cloud.isGuestUser,
   };
 };
 
@@ -39,14 +41,20 @@ const UploadsNav = ({
   setLoader,
   createFolder,
   deleteFiles,
-  userFullInfo,
+  userInfo,
   uploadFilterByPos,
   setUploadFilterByPos,
   setCreateFolderModal,
   tourType,
   tourStepNumber,
+  deleteModal,
+  setDeleteModal,
+  editFolder,
+  setEditFolder,
+  setSortByName,
+  isGuestUser,
+  setLoginModal,
 }) => {
-  const [deleteModal, setDeleteModal] = useState(false);
   const [uploadTourLoader, setUploadTourLoader] = useState(false);
 
   const createNewFolderHandler = () => {
@@ -85,42 +93,39 @@ const UploadsNav = ({
           if (fileText[i].length) {
             let pgnStr = '[Event ' + fileText[i];
             let finalName = i + '-' + initalName;
+            if (!pgnStr.length || pgnStr === ' *') {
+              pgnStr = `[SetUp "1"]\n[FEN "${INITIAL_FEN}"]\n\n*`;
+            }
             let file = new File([pgnStr], finalName, {
               type: 'application/vnd.chess-pgn',
             });
             transfer.items.add(file);
-            headers[finalName] = getPgnFileHeader(pgnStr);
           }
         }
       } else {
+        if (!fileText.length || fileText === ' *') {
+          fileText = `[SetUp "1"]\n[FEN "${INITIAL_FEN}"]\n\n*`;
+        }
         let file = new File([fileText], files[i].name, {
           type: 'application/vnd.chess-pgn',
         });
         transfer.items.add(file);
-        headers[files[i].name] = getPgnFileHeader(fileText);
       }
     }
     let transferFiles = transfer.files;
-    uploadFiles(path, transferFiles, userFullInfo).then((response) => {
-      const { data } = response.payload.uploadFilesResponse;
-      if (data.length) {
-        data.forEach((pgn) => {
-          updatePgnTags(
-            pgn.id,
-            pgn.name,
-            headers[pgn.name],
-            userFullInfo.token
-          );
-        });
-      }
-    });
+    return uploadFiles(path, transferFiles, userInfo);
   };
 
   const uploadFolderHandler = (e) => {
+    if (isGuestUser) {
+      setLoginModal(true);
+      return;
+    }
     const files = e.target.files;
     const path = files[0].webkitRelativePath.split('/')[0];
     setLoader('folderLoader');
-    createFolder('/', path, userFullInfo).then(() => {
+    createFolder('/', path, userInfo).then(() => {
+      setLoader('');
       uploadFilesHandler(files, path);
     });
   };
@@ -131,6 +136,10 @@ const UploadsNav = ({
 
   const backFromDirectoryHandler = () => {
     setCurrentDirectory('/');
+  };
+
+  const renameFolderHandler = () => {
+    setEditFolder(true);
   };
 
   return (
@@ -147,12 +156,24 @@ const UploadsNav = ({
       </div>
       <div className="d-flex flex-row">
         <div className="upload-nav-operatons">
+          {selectedFiles && selectedFiles.length === 1 ? (
+            <MdOutlineDriveFileRenameOutline
+              className="upload-nav-icon directory"
+              width={40}
+              height={40}
+              title="Rename Folder"
+              onClick={renameFolderHandler}
+            />
+          ) : (
+            <></>
+          )}
           {selectedFiles && selectedFiles.length ? (
             <RiDeleteBinFill
               className="upload-nav-icon directory"
               width={35}
               height={35}
               onClick={deleteFilesHandler}
+              title="Delete Folder"
             />
           ) : (
             <></>
@@ -206,13 +227,20 @@ const UploadsNav = ({
                 mozdirectory=""
                 hidden
                 onChange={(e) => {
-                  uploadFolderHandler(e).then(() => {
-                    setLoader('');
-                  });
+                  uploadFolderHandler(e);
                 }}
               />
             </>
           )}
+          <MdOutlineSort
+            className="upload-nav-icon directory"
+            width={40}
+            height={40}
+            title="Sort by Name"
+            onClick={() => {
+              setSortByName((sortByName) => !sortByName);
+            }}
+          />
         </div>
         <div>
           <select
@@ -233,8 +261,13 @@ const UploadsNav = ({
         selectedFiles={selectedFiles}
         setSelectedFiles={setSelectedFiles}
         deleteFiles={deleteFiles}
-        userFullInfo={userFullInfo}
+        userInfo={userInfo}
         setLoader={setLoader}
+      />
+      <EditFolderNameModal
+        selectedFiles={selectedFiles}
+        isOpen={editFolder}
+        setIsOpen={setEditFolder}
       />
     </div>
   );

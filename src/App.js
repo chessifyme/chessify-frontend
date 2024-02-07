@@ -1,130 +1,168 @@
-import React, { Component } from 'react';
+import React, { useEffect, useState } from 'react';
 import { connect } from 'react-redux';
 import MainPage from './components/MainPage.jsx';
-import { Switch, Route } from 'react-router-dom';
-import { getUserFullInfo } from './actions/cloud';
-import { getUserAccountDat } from './actions/userAccount';
-import { getUserFullData, getUserAccountInfo } from './utils/api';
-import { connectToPro, setSubModal } from './actions/cloud';
+import { Routes, Route } from 'react-router-dom';
+import {
+  getUserAccount,
+  getUserServersInfo,
+  getUserNotifictionInfo,
+  getUserPlansInfo,
+  setSubModal,
+  setIsGuestUser,
+} from './actions/cloud';
+import {
+  getUserAccountData,
+  getUserServersData,
+  getUserNotifiactionData,
+  getUserPlansData,
+} from './utils/api';
+import { connectToPro } from './actions/cloud';
 import NavBar from './components/NavBar.jsx';
 import UserAccount from './components/UserAccount.jsx';
 import PagePreloader from './components/common/PagePreloader.jsx';
 import ThemeProvider from './providers/ThemeProvider';
+import {
+  restoreAllPgnArr,
+  setAnalyzingFenTabIndx,
+  setFen,
+} from './actions/board';
+import { recoverLastSession } from './utils/utils';
+import { signInAnonymously } from './firebase';
 
-const mapStateToProps = (state) => {
-  return {
-    userAccountInfo: state.userAccount.userAccountInfo,
-    userFullInfo: state.cloud.userFullInfo,
+const App = (props) => {
+  const {
+    getUserAccount,
+    getUserServersInfo,
+    getUserNotifictionInfo,
+    getUserPlansInfo,
+    connectToPro,
+    setSubModal,
+    setIsGuestUser,
+    restoreAllPgnArr,
+    setFen,
+    setAnalyzingFenTabIndx,
+  } = props;
+  const [loading, setLoading] = useState(true);
+  const loggedOut = localStorage.getItem('logged_out');
+
+  const showLastSessionModal = async () => {
+    return signInAnonymously().then((idToken) => {
+      recoverLastSession(restoreAllPgnArr, setFen, setAnalyzingFenTabIndx);
+    });
   };
+
+  useEffect(() => {
+    localStorage.setItem('logged_out', true);
+
+    const multiRequests = async () => {
+      try {
+        const userDetaleInfo = await getUserAccountData();
+        if (userDetaleInfo && userDetaleInfo.pieces_theme) {
+          const head = document.head;
+          const link = document.createElement('link');
+          link.type = 'text/css';
+          link.rel = 'stylesheet';
+          link.href = `https://lichess1.org/assets/_TDotAa/piece-css/${userDetaleInfo.pieces_theme}.css`;
+          head.appendChild(link);
+        }
+        const plans = await getUserPlansData();
+        const notification = await getUserNotifiactionData();
+        if (
+          notification &&
+          notification.notify_upgrade &&
+          notification.subscription &&
+          notification.subscription.from_ads
+        ) {
+          setSubModal('trial');
+        } else if (
+          notification &&
+          notification.notify_upgrade &&
+          !notification.subscription
+        ) {
+          setSubModal('after5Min');
+        }
+        if (notification && notification.notify_survey) {
+          setSubModal('survey');
+        }
+        await showLastSessionModal();
+        let servers = await getUserServersData();
+
+        if (servers && servers.servers && Object.keys(servers.servers).length) {
+          if (!Boolean(sessionStorage.getItem('tabs'))) {
+            setSubModal('currently_analyzing');
+          } else {
+            connectToPro(servers.servers);
+          }
+        }
+        getUserAccount(userDetaleInfo);
+        getUserPlansInfo(plans);
+        getUserNotifictionInfo(notification);
+        getUserServersInfo(servers);
+        setIsGuestUser(false);
+      } catch (e) {
+        console.log('SOMETHING WRONG WITH MULTI REQUESTS', e);
+        setIsGuestUser(true);
+        await showLastSessionModal();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    multiRequests();
+  }, []);
+
+  useEffect(() => {
+    const handleStorageChange = (event) => {
+      if (event.key === 'logged_out' && event.oldValue === 'true') {
+        localStorage.setItem('logged_out', 'false');
+        window.location.reload();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [loggedOut]);
+
+  return loading ? (
+    <PagePreloader />
+  ) : (
+    <ThemeProvider>
+      <NavBar />
+      <Routes>
+        <Route
+          exact
+          path="/analysis/account_settings"
+          element={<UserAccount />}
+        />
+        <Route exact path={`/analysis`} element={<MainPage />} />
+        <Route exact path={`/analysis/chess-database`} element={<MainPage />} />
+        <Route
+          exact
+          path={`/analysis/lichess-database`}
+          element={<MainPage />}
+        />
+        <Route exact path={`/analysis/cloud-storage`} element={<MainPage />} />
+        <Route exact path={`/analysis/video-search`} element={<MainPage />} />
+        <Route
+          exact
+          path={`/analysis/chess-pdf-scanner`}
+          element={<MainPage />}
+        />
+      </Routes>
+    </ThemeProvider>
+  );
 };
 
-class App extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      getUserFullInfoIntervalId: null,
-      loading: true,
-    };
-  }
-  componentDidMount() {
-    const {
-      getUserAccountDat,
-      getUserFullInfo,
-      connectToPro,
-      setSubModal,
-    } = this.props;
-    getUserAccountInfo()
-      .then((userAccountDataResponse) => {
-        getUserAccountDat(userAccountDataResponse);
-      })
-      .catch((e) => {
-        console.error('USER ACOOUNT ERROR======>>>>', e);
-      });
-
-    getUserFullData()
-      .then((userDetaleInfo) => {
-        getUserFullInfo(userDetaleInfo);
-      })
-      .catch((e) => {
-        console.error(e);
-      });
-
-    const intervalId = setInterval(() => {
-      getUserFullData()
-        .then((userDetaleInfo) => {
-          getUserFullInfo(userDetaleInfo);
-          const wssChannels = [];
-          if (
-            userDetaleInfo.notify &&
-            userDetaleInfo.subscription &&
-            userDetaleInfo.subscription.from_ads
-          ) {
-            setSubModal('trial');
-          } else if (userDetaleInfo.notify && !userDetaleInfo.subscription) {
-            setSubModal('after5Min');
-          }
-          if (userDetaleInfo.servers) {
-            for (const [engine, params] of Object.entries(
-              userDetaleInfo.servers
-            )) {
-              wssChannels.push({
-                name: engine,
-                channel: params[1],
-                temp: params[0].for_guests,
-                isSubscription: userDetaleInfo.subscription,
-                cores: params[0].cores,
-              });
-            }
-            connectToPro(wssChannels);
-            this.setState({
-              loading: false,
-            });
-          }
-        })
-        .catch((e) => {
-          console.error(e);
-        });
-    }, 3000);
-    this.setState({
-      getUserFullInfoIntervalId: intervalId,
-    });
-  }
-
-  componentWillUnmount() {
-    const { getUserFullInfoIntervalId } = this.state;
-    clearInterval(getUserFullInfoIntervalId);
-  }
-
-  render() {
-    const { userAccountInfo } = this.props;
-    const { loading } = this.state;
-
-    if (loading) {
-      return <PagePreloader />;
-    }
-
-    return (
-      <ThemeProvider>
-        <NavBar userInfo={this.props.userFullInfo} />
-        <Switch>
-          <Route
-            exact
-            path="/analysis/account_settings"
-            component={UserAccount}
-          />
-          <Route
-            exact
-            path={`${process.env.PUBLIC_URL}`}
-            component={MainPage}
-          />
-        </Switch>
-      </ThemeProvider>
-    );
-  }
-}
-export default connect(mapStateToProps, {
-  getUserAccountDat,
-  getUserFullInfo,
+export default connect(null, {
+  getUserAccount,
+  getUserServersInfo,
+  getUserNotifictionInfo,
+  getUserPlansInfo,
   connectToPro,
   setSubModal,
+  setIsGuestUser,
+  restoreAllPgnArr,
+  setFen,
+  setAnalyzingFenTabIndx,
 })(App);

@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { connect } from 'react-redux';
-import Chess from 'chess.js';
 import { addMoveNumbersToSans } from '../../utils/chess-utils';
 import { doMove, setFen, setAnalyzingFenTabIndx } from '../../actions/board';
+import { setSavedAnalyzeInfo } from '../../actions/cloud';
 import { ENGINES } from '../../constants/cloud-params';
 import { IoIosLock, IoIosUnlock, IoIosClose } from 'react-icons/io';
+import * as Sentry from '@sentry/react';
 
 const mapStateToProps = (state) => {
   return {
@@ -43,6 +44,7 @@ const SavedAnalysisBlock = ({
   doMove,
   setFen,
   serverName,
+  setSavedAnalyzeInfo,
 }) => {
   // ToDo make move clickable
 
@@ -67,9 +69,11 @@ const SavedAnalysisBlock = ({
     const dataFromLoacalStroage = JSON.parse(
       sessionStorage.getItem('latest_analyze_info')
     );
+
     const result = dataFromLoacalStroage.filter(
       (item) => item.name !== engineName
     );
+    setSavedAnalyzeInfo(result);
     sessionStorage.setItem('latest_analyze_info', JSON.stringify(result));
   };
 
@@ -131,29 +135,43 @@ const SavedAnalysisBlock = ({
         </div> */}
       </div>
       <ul className="list-style--1" style={{ whiteSpace: 'nowrap' }}>
-        {analysis.variations.map((variation, indx) =>
-          indx === 0 ||
-          (analysis.variations &&
-            analysis.variations[0] &&
-            analysis.variations[0].nps !== '0') ||
-          analysis.depth !== '1' ? (
-            <li>
-              <span className="result">{`(${variation.score}) `}</span>
-              {variation.pgn &&
-                addMoveNumbersToSans(fenToAnalyze, variation.pgn).map(
-                  (moveObj, i) => (
-                    <button
-                      disabled={true}
-                      className="analyze-move"
-                      // onClick={() => handleMoveClick(variation.pgn, i)}
-                    >{`${moveObj.move_number} ${moveObj.move} `}</button>
-                  )
-                )}
-            </li>
-          ) : (
-            <></>
-          )
-        )}
+        {analysis.variations.map((variation, indx) => {
+          try {
+            if (
+              indx === 0 ||
+              (analysis.variations &&
+                analysis.variations[0] &&
+                analysis.variations[0].nps !== '0') ||
+              analysis.depth !== '1'
+            ) {
+              return (
+                <li>
+                  <span className="result">{`(${variation.score}) `}</span>
+                  {variation.pgn &&
+                    addMoveNumbersToSans(fenToAnalyze, variation.pgn).map(
+                      (moveObj, i) => (
+                        <button
+                          disabled={true}
+                          className="analyze-move"
+                          // onClick={() => handleMoveClick(variation.pgn, i)}
+                        >{`${moveObj.move_number} ${moveObj.move} `}</button>
+                      )
+                    )}
+                </li>
+              );
+            } else {
+              return <></>;
+            }
+          } catch (error) {
+            console.log('VARIATION SCORE ERROR', analysis.variations);
+            Sentry.captureException(error, {
+              extra: {
+                variations: analysis.variations,
+              },
+            });
+            return <></>;
+          }
+        })}
       </ul>
     </div>
   );
@@ -164,15 +182,8 @@ const SavedAnalysisArea = ({
   savedAnalyzeInfo,
   serverName,
   setFen,
-  setAnalyzingFenTabIndx,
-  proAnalyzers,
+  setSavedAnalyzeInfo,
 }) => {
-  useEffect(() => {
-    if (!proAnalyzers) {
-      setAnalyzingFenTabIndx(null);
-    }
-  }, [proAnalyzers]);
-
   return (
     <React.Fragment>
       {savedAnalyzeInfo.map((analyzer) => {
@@ -192,6 +203,7 @@ const SavedAnalysisArea = ({
                     doMove={doMove}
                     setFen={setFen}
                     serverName={serverName}
+                    setSavedAnalyzeInfo={setSavedAnalyzeInfo}
                   />
                 </div>
               </div>
@@ -207,4 +219,5 @@ export default connect(mapStateToProps, {
   doMove,
   setFen,
   setAnalyzingFenTabIndx,
+  setSavedAnalyzeInfo,
 })(SavedAnalysisArea);

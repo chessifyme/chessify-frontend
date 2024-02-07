@@ -11,21 +11,21 @@ const mapStateToProps = (state) => {
   };
 };
 
-const PlanDetails = ({ userInfo, getProductDetails, productDetails }) => {
+const PlanDetails = ({ plans, getProductDetails, productDetails }) => {
   const [subscription, setSubscription] = useState(null);
   const [productId, setProductId] = useState(null);
   const [expiryDate, setExpiryDate] = useState(null);
   const [isTappedManageSubscription, setManageSubscription] = useState(false);
 
   useEffect(() => {
-    setSubscription(userInfo.subscription);
-    if (userInfo.subscription) {
-      setProductId(userInfo.subscription.product_id);
-      setExpiryDate(userInfo.subscription.valid_till);
+    setSubscription(plans.subscription);
+    if (plans.subscription) {
+      setProductId(plans.subscription.product_id);
+      setExpiryDate(plans.subscription.valid_till);
     }
-    else if (userInfo.package) {
-      setProductId(userInfo.package.product_id);
-      setExpiryDate(userInfo.package.valid_till);
+    else if (plans.package) {
+      setProductId(plans.package.product_id);
+      setExpiryDate(plans.package.valid_till);
     }
 
     if (productId) {
@@ -35,10 +35,8 @@ const PlanDetails = ({ userInfo, getProductDetails, productDetails }) => {
           getProductDetails(data.result[0]);
         });
     }
-    document.getElementById('planDetails').style.display = productId
-      ? 'flex'
-      : 'none';
-  }, [productId]);
+    document.getElementById('planDetails').style.display = 'flex'
+  }, [productId, plans]);
 
   const recurrence = () => {
     switch (productDetails.recurrence) {
@@ -69,7 +67,7 @@ const PlanDetails = ({ userInfo, getProductDetails, productDetails }) => {
 
   const addLoading = () => {
     return (
-      <div class="lds-ellipsis">
+      <div className="lds-ellipsis">
         <div></div>
         <div></div>
         <div></div>
@@ -90,16 +88,16 @@ const PlanDetails = ({ userInfo, getProductDetails, productDetails }) => {
           <h4 className="user-account-details-title">Your plan details</h4>
           <div className="user-account-details-current-plan">
             <span>
-              Current plan <span>{productDetails.name}</span>
+              Current plan <span>{ productDetails ? productDetails.name : ''}</span>
             </span>
             {isTappedManageSubscription && addLoading()}
-            {userInfo.subscription && !isTappedManageSubscription && (<button className="change-btn" onClick={manageSub}>
+            {!isTappedManageSubscription && (<button className="change-btn" onClick={manageSub}>
               Manage Subscription
             </button>)}
           </div>
         </div>
         <div className="line"></div>
-        <div>
+        {Object.keys(productDetails).length !== 0 ? <div>
           <div className="user-account-details-current-plan-info">
             <span className="current-plan-info-title">Billing:</span>
             <span className="referral-link-description">
@@ -128,7 +126,7 @@ const PlanDetails = ({ userInfo, getProductDetails, productDetails }) => {
               {moment(expiryDate).format('DD MMM YYYY, H:m')}
             </span>
           </div>
-        </div>
+        </div> : <div></div>}
       </div>
       <a href="/" className="green-btn" onClick={logout}>
         Log out

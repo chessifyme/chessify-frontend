@@ -3,7 +3,7 @@ import { Modal, Button } from 'react-bootstrap';
 import {
   setReference,
   setMoveLoader,
-  setGameRefLoader,
+  setLoader,
   setGameReference,
   setTourType,
   setTourNumber,
@@ -27,7 +27,7 @@ const SearchFilterModal = ({
   searchParams,
   setReference,
   setMoveLoader,
-  setGameRefLoader,
+  setLoader,
   setGameReference,
   tourStepNumber,
   tourType,
@@ -41,6 +41,7 @@ const SearchFilterModal = ({
     whiteElo: '',
     blackElo: '',
     ignoreColor: false,
+    ignoreBlitzRapid: false,
     resultWins: false,
     resultDraws: false,
     resultLosses: false,
@@ -90,6 +91,7 @@ const SearchFilterModal = ({
       whiteElo: '',
       blackElo: '',
       ignoreColor: false,
+      ignoreBlitzRapid: false,
       resultWins: false,
       resultDraws: false,
       resultLosses: false,
@@ -153,6 +155,16 @@ const SearchFilterModal = ({
     }
   };
 
+  const ignoreBlitzRapidHandler = () => {
+    setUserInput({
+      ...userInput,
+      ignoreBlitzRapid: !userInput.ignoreBlitzRapid,
+    });
+    if (tourType === 'prepare' && tourStepNumber === 4) {
+      setTourNextStep();
+    }
+  };
+
   const resultWinsHandler = () => {
     setUserInput({ ...userInput, resultWins: !userInput.resultWins });
   };
@@ -177,11 +189,11 @@ const SearchFilterModal = ({
 
   const handleReferenceSearch = () => {
     setMoveLoader(true);
-    setGameRefLoader(true);
+    setLoader('gameRefLoader');
     setReference(fen, userInput);
     setGameReference(false, userInput);
     handleCloseModal();
-    if (tourType === 'prepare' && tourStepNumber === 4) {
+    if (tourType === 'prepare' && tourStepNumber === 5) {
       setTourType('');
       setTourNumber(-1);
     }
@@ -194,6 +206,9 @@ const SearchFilterModal = ({
       whiteElo: searchParams.whiteElo || '',
       blackElo: searchParams.blackElo || '',
       ignoreColor: searchParams.ignoreColor ? searchParams.ignoreColor : false,
+      ignoreBlitzRapid: searchParams.ignoreBlitzRapid
+        ? searchParams.ignoreBlitzRapid
+        : false,
       resultWins: searchParams.resultWins ? searchParams.resultWins : false,
       resultDraws: searchParams.resultDraws ? searchParams.resultDraws : false,
       resultLosses: searchParams.resultLosses
@@ -381,6 +396,15 @@ const SearchFilterModal = ({
             />
             <label htmlFor="ignoreColor">Ignore Color</label>
           </div>
+          <div className="d-flex flex-row mt-2 search-checkbox">
+            <input
+              id="ignoreBlitzRapid"
+              type="checkbox"
+              checked={userInput.ignoreBlitzRapid}
+              onChange={ignoreBlitzRapidHandler}
+            />
+            <label htmlFor="ignoreBlitzRapid">Ignore Blitz and Rapid</label>
+          </div>
         </div>
         <div className="game-data">
           <h4>Game Data</h4>
@@ -460,7 +484,7 @@ const SearchFilterModal = ({
 export default connect(mapStateToProps, {
   setReference,
   setMoveLoader,
-  setGameRefLoader,
+  setLoader,
   setGameReference,
   setTourType,
   setTourNumber,

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { connect } from 'react-redux';
 import PopularPositionMatched from '../common/PopularPositionMatched';
-import { setActiveMove } from '../../actions/board';
+import { setActiveMove, addCommentToMove } from '../../actions/board';
 import {
   checkForMainLineVariation,
   getMoveFullInfo,
@@ -15,6 +15,7 @@ import {
   CellMeasurer,
   CellMeasurerCache,
 } from 'react-virtualized';
+import { FaCheckCircle } from 'react-icons/fa';
 
 const mapStateToProps = (state) => {
   return {
@@ -30,7 +31,17 @@ const getPgnRavLines = (
   appendCurrentLineComponents,
   container,
   parentIndex = '',
-  symbolModeEnabled
+  symbolModeEnabled,
+  handleContextMenu,
+  setContextmenuCoords,
+  setShowMenu,
+  editComment,
+  setEditComment,
+  refInput,
+  refInputText,
+  newComment,
+  setNewComment,
+  addCommentToMove
 ) => {
   moves.forEach((move, indx) => {
     if (move.ravs && checkSubravs(move)) {
@@ -59,7 +70,17 @@ const getPgnRavLines = (
           appendCurrentLineComponents,
           container,
           lineIndex,
-          symbolModeEnabled
+          symbolModeEnabled,
+          handleContextMenu,
+          setContextmenuCoords,
+          setShowMenu,
+          editComment,
+          setEditComment,
+          refInput,
+          refInputText,
+          newComment,
+          setNewComment,
+          addCommentToMove
         );
         container = [];
       });
@@ -72,31 +93,114 @@ const getPgnRavLines = (
         moveComments,
       } = getMoveFullInfo(move, symbolModeEnabled);
       container.push(
-        <button
-          id={move.move_id}
-          key={move.move_id}
-          onClick={() => setActiveMove(move)}
-          className={
-            activeMove && move.move_id === activeMove.move_id ? 'active' : ''
-          }
-          style={{ border: 'none', marginLeft: indx === 0 ? 0 : 10 }}
-        >
-          {moveNumber}
-          {movePiece && (
-            <span className={symbolModeEnabled ? 'symbol' : 'not'}>
-              {movePiece}
+        <>
+          <button
+            id={move.move_id}
+            key={move.move_id}
+            onClick={() => setActiveMove(move)}
+            onContextMenu={(e) =>
+              handleContextMenu(
+                e,
+                setContextmenuCoords,
+                setShowMenu,
+                setActiveMove,
+                move
+              )
+            }
+            className={
+              activeMove && move.move_id === activeMove.move_id ? 'active' : ''
+            }
+            style={{ border: 'none', marginLeft: indx === 0 ? 0 : 8 }}
+          >
+            <span>{moveNumber}</span>
+            {movePiece ? (
+              <span className={symbolModeEnabled ? 'symbol' : 'not'}>
+                {movePiece}
+              </span>
+            ) : <></>}
+            {moveDirection ? <span>{moveDirection}</span> : <></>}
+            <span className="nags">
+              {moveNags.endsWith('.svg') ? (
+                <img src={moveNags} height={12} width={12} alt="" />
+              ) : (
+                moveNags
+              )}
             </span>
-          )}
-          {moveDirection && <span>{moveDirection}</span>}
-          <span className="nags">
-            {moveNags.endsWith('.svg') ? (
-              <img src={moveNags} height={12} width={12} alt="" />
-            ) : (
-              moveNags
-            )}
-          </span>
-          <span className="comments">{moveComments}</span>
-        </button>
+          </button>
+          {move.comments &&
+            move.comments.map((comment, indx) => {
+              let commentsStr = '';
+              if (comment.text && comment.text.includes('%eval')) {
+                commentsStr += comment.text.replace('%eval ', '');
+              } else if (comment.text) {
+                commentsStr += comment.text;
+              }
+              const isEditing =
+                editComment &&
+                editComment.id &&
+                editComment.id === move.move_id &&
+                editComment.index == indx;
+              return !isEditing ? (
+                <button
+                  onClick={(e) => {
+                    if (e.detail === 2) {
+                      setEditComment({
+                        id: move.move_id,
+                        index: indx,
+                      });
+                      setNewComment({
+                        comment: comment.text,
+                        position: comment.text.length - 1,
+                      });
+                      setActiveMove(move);
+                    }
+                  }}
+                  className="comments"
+                  key={indx}
+                >
+                  {commentsStr}
+                </button>
+              ) : (
+                <div className="notation-wrap" ref={refInput}>
+                  <input
+                    className="comments-input"
+                    ref={refInputText}
+                    value={newComment.comment}
+                    style={{ width: `${newComment.comment.length * 8}px` }}
+                    onChange={(e) => {
+                      setNewComment({
+                        comment: e.target.value,
+                        position: e.target.selectionStart,
+                      });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        addCommentToMove(
+                          move,
+                          newComment.comment,
+                          editComment.index
+                        );
+                        setNewComment({});
+                        setEditComment({});
+                      }
+                    }}
+                  />
+                  <FaCheckCircle
+                    className="comments-check"
+                    onClick={() => {
+                      addCommentToMove(
+                        move,
+                        newComment.comment,
+                        editComment.index
+                      );
+                      setNewComment({});
+                      setEditComment({});
+                    }}
+                  />
+                </div>
+              );
+            })}
+        </>
       );
       if (move.ravs && !checkSubravs(move)) {
         move.ravs.forEach((moves, index) => {
@@ -106,7 +210,6 @@ const getPgnRavLines = (
               movePiece,
               moveDirection,
               moveNags,
-              moveComments,
             } = getMoveFullInfo(mv, symbolModeEnabled);
             const openParenthesis = index === 0 && indx === 0;
             const semicolumn =
@@ -119,6 +222,15 @@ const getPgnRavLines = (
                 <button
                   id={mv.move_id}
                   onClick={() => setActiveMove(mv)}
+                  onContextMenu={(e) =>
+                    handleContextMenu(
+                      e,
+                      setContextmenuCoords,
+                      setShowMenu,
+                      setActiveMove,
+                      mv
+                    )
+                  }
                   className={
                     activeMove && mv.move_id === activeMove.move_id
                       ? 'active'
@@ -126,16 +238,19 @@ const getPgnRavLines = (
                   }
                   style={{
                     border: 'none',
-                    marginLeft: openParenthesis ? 0 : 10,
+                    marginLeft: openParenthesis ? 0 : 8,
                   }}
                 >
-                  {moveNumber}
-                  {movePiece && (
+                  <span>{moveNumber}</span>
+                  {movePiece ? (
                     <span className={symbolModeEnabled ? 'symbol' : 'not'}>
                       {movePiece}
                     </span>
-                  )}
-                  {moveDirection && <span>{moveDirection}</span>}
+                  ) :
+                    <></>
+                  }
+
+                  {moveDirection ? <span>{moveDirection}</span> : <></>}
                   <span className="nags">
                     {moveNags.endsWith('.svg') ? (
                       <img src={moveNags} height={12} width={12} alt="" />
@@ -143,8 +258,82 @@ const getPgnRavLines = (
                       moveNags
                     )}
                   </span>
-                  <span className="comments">{moveComments}</span>
                 </button>
+                {mv.comments &&
+                  mv.comments.map((comment, indx) => {
+                    let commentsStr = '';
+                    if (comment.text && comment.text.includes('%eval')) {
+                      commentsStr += comment.text.replace('%eval ', '');
+                    } else if (comment.text) {
+                      commentsStr += comment.text;
+                    }
+                    const isEditing =
+                      editComment &&
+                      editComment.id &&
+                      editComment.id === mv.move_id &&
+                      editComment.index == indx;
+                    return !isEditing ? (
+                      <button
+                        onClick={(e) => {
+                          if (e.detail === 2) {
+                            setEditComment({
+                              id: mv.move_id,
+                              index: indx,
+                            });
+                            setNewComment({
+                              comment: comment.text,
+                              position: comment.text.length - 1,
+                            });
+                            setActiveMove(mv);
+                          }
+                        }}
+                        className="comments"
+                        key={indx}
+                      >
+                        {commentsStr}
+                      </button>
+                    ) : (
+                      <div className="notation-wrap" ref={refInput}>
+                        <input
+                          className="comments-input"
+                          ref={refInputText}
+                          style={{
+                            width: `${newComment.comment.length * 8}px`,
+                          }}
+                          value={newComment.comment}
+                          onChange={(e) => {
+                            setNewComment({
+                              comment: e.target.value,
+                              position: e.target.selectionStart,
+                            });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              addCommentToMove(
+                                mv,
+                                newComment.comment,
+                                editComment.index
+                              );
+                              setNewComment({});
+                              setEditComment({});
+                            }
+                          }}
+                        />
+                        <FaCheckCircle
+                          className="comments-check"
+                          onClick={() => {
+                            addCommentToMove(
+                              mv,
+                              newComment.comment,
+                              editComment.index
+                            );
+                            setNewComment({});
+                            setEditComment({});
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 <span>{semicolumn ? ';' : ''}</span>
                 <span>{closeParenthesis ? ')' : ''}</span>
               </span>
@@ -161,6 +350,16 @@ const getPgnLines = (
   activeMove,
   setActiveMove,
   symbolModeEnabled,
+  handleContextMenu,
+  setContextmenuCoords,
+  setShowMenu,
+  editComment,
+  setEditComment,
+  refInput,
+  refInputText,
+  newComment,
+  setNewComment,
+  addCommentToMove,
   container = [],
   componentsLines = []
 ) => {
@@ -182,34 +381,38 @@ const getPgnLines = (
       </li>
     );
   };
-
   moves.forEach((move) => {
-    const {
-      moveNumber,
-      movePiece,
-      moveDirection,
-      moveNags,
-      moveComments,
-    } = getMoveFullInfo(move, symbolModeEnabled);
+    const { moveNumber, movePiece, moveDirection, moveNags } = getMoveFullInfo(
+      move,
+      symbolModeEnabled
+    );
     container.push(
       <span key={move.move_id} className="button-var">
         <button
           id={move.move_id}
           onClick={() => setActiveMove(move)}
-          className={
-            activeMove && move.move_id === activeMove.move_id
+          onContextMenu={(e) =>
+            handleContextMenu(
+              e,
+              setContextmenuCoords,
+              setShowMenu,
+              setActiveMove,
+              move
+            )
+          }
+          className={`${activeMove && move.move_id === activeMove.move_id
               ? 'active'
               : 'non-active'
-          }
-          style={{ border: 'none', marginLeft: 10 }}
+            } ${move.type && move.type.length ? move.type : ''}`}
+          style={{ border: 'none', marginLeft: 8 }}
         >
-          {moveNumber}
-          {movePiece && (
+          <span>{moveNumber}</span>
+          {movePiece ? (
             <span className={symbolModeEnabled ? 'symbol' : 'not'}>
               {movePiece}
             </span>
-          )}
-          {moveDirection && <span>{moveDirection}</span>}
+          ) : <></>}
+          {moveDirection ? <span>{moveDirection}</span> : <></>}
           <span className="nags">
             {moveNags.endsWith('.svg') ? (
               <img src={moveNags} height={12} width={12} alt="" />
@@ -217,8 +420,80 @@ const getPgnLines = (
               moveNags
             )}
           </span>
-          <span className="comments">{moveComments}</span>
         </button>
+        {move.comments &&
+          move.comments.map((comment, indx) => {
+            let commentsStr = '';
+            if (comment.text && comment.text.includes('%eval')) {
+              commentsStr += comment.text.replace('%eval ', '');
+            } else if (comment.text) {
+              commentsStr += comment.text;
+            }
+            const isEditing =
+              editComment &&
+              editComment.id &&
+              editComment.id === move.move_id &&
+              editComment.index == indx;
+            return !isEditing ? (
+              <button
+                onClick={(e) => {
+                  if (e.detail === 2) {
+                    setEditComment({
+                      id: move.move_id,
+                      index: indx,
+                    });
+                    setNewComment({
+                      comment: comment.text,
+                      position: comment.text.length - 1,
+                    });
+                    setActiveMove(move);
+                  }
+                }}
+                key={indx}
+                className="comments"
+              >
+                {commentsStr}
+              </button>
+            ) : (
+              <div className="notation-wrap" ref={refInput} key={indx}>
+                <input
+                  className="comments-input"
+                  ref={refInputText}
+                  value={newComment.comment}
+                  onChange={(e) => {
+                    setNewComment({
+                      comment: e.target.value,
+                      position: e.target.selectionStart,
+                    });
+                  }}
+                  style={{ width: `${newComment.comment.length * 8}px` }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      addCommentToMove(
+                        move,
+                        newComment.comment,
+                        editComment.index
+                      );
+                      setNewComment({});
+                      setEditComment({});
+                    }
+                  }}
+                />
+                <FaCheckCircle
+                  className="comments-check"
+                  onClick={() => {
+                    addCommentToMove(
+                      move,
+                      newComment.comment,
+                      editComment.index
+                    );
+                    setNewComment({});
+                    setEditComment({});
+                  }}
+                />
+              </div>
+            );
+          })}
       </span>
     );
     if (move.ravs) {
@@ -226,7 +501,7 @@ const getPgnLines = (
       container = [];
 
       move.ravs.forEach((moveRav) => {
-        container.push('[');
+        container.push(<span>[</span>);
         appendCurrentLineComponents(container, 1);
         getPgnRavLines(
           moveRav.moves,
@@ -235,7 +510,17 @@ const getPgnLines = (
           appendCurrentLineComponents,
           container,
           '',
-          symbolModeEnabled
+          symbolModeEnabled,
+          handleContextMenu,
+          setContextmenuCoords,
+          setShowMenu,
+          editComment,
+          setEditComment,
+          refInput,
+          refInputText,
+          newComment,
+          setNewComment,
+          addCommentToMove
         );
         componentsLines[componentsLines.length - 1].props.children.push(
           <span key={Math.random()}>]</span>
@@ -257,15 +542,50 @@ const VariationsNew = (props) => {
     setContextmenuCoords,
     showMenu,
     setShowMenu,
+    fromRef,
+    addCommentToMove,
+    editComment,
+    setEditComment,
+    newComment,
+    setNewComment,
   } = props;
   const moves = pgn.moves ? cloneDeep(pgn.moves) : [];
+  const refInput = useRef(null);
+  const refInputText = useRef(null);
+
+  useEffect(() => {
+    if (!refInputText.current) return;
+    refInputText.current.focus();
+    refInputText.current.setSelectionRange(
+      newComment.position,
+      newComment.position
+    );
+  }, [newComment]);
+
+  const handleClickOutside = (event) => {
+    if (refInput.current && !refInput.current.contains(event.target)) {
+      setEditComment({});
+      setNewComment({});
+    }
+  };
+
+  useEffect(() => {
+    const identifier = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside, true);
+    }, 500);
+
+    return () => {
+      clearTimeout(identifier);
+      document.removeEventListener('click', handleClickOutside, true);
+    };
+  });
 
   const scrollRef = useRef();
   const contextRef = useRef(null);
 
   const cache = new CellMeasurerCache({
     fixedWidth: true,
-    defaultHeight: 25,
+    defaultHeight: 40,
   });
 
   const handleClick = () => {
@@ -281,24 +601,28 @@ const VariationsNew = (props) => {
     }
   }, [showMenu]);
 
-  const handleContextMenu = (event) => {
-    const containerCoords = contextRef.current.getBoundingClientRect();
-    const isInContainerX =
-      containerCoords.left < event.pageX && containerCoords.right > event.pageX;
-    const isInContainerY =
-      containerCoords.top < event.pageY && containerCoords.bottom > event.pageY;
-
-    if (!isInContainerX || !isInContainerY) return;
-
+  const handleContextMenu = (
+    event,
+    setContextmenuCoords,
+    setShowMenu,
+    setActiveMove,
+    move
+  ) => {
     event.preventDefault();
+    
+    if(window.innerWidth < 800 ){
+      return
+    }
+    setActiveMove(move);
+    
     const subtructBoardWidth =
       Math.trunc(
         document
           .getElementsByClassName('page-wrapper')[0]
           .getBoundingClientRect().width / 3
-      ) + 180;
+      ) + 200;
     let coordX = event.pageX - subtructBoardWidth;
-    const coordY = event.pageY - 180;
+    const coordY = event.pageY - 100;
 
     let reverse = false;
     const endPoint =
@@ -307,7 +631,7 @@ const VariationsNew = (props) => {
         .getBoundingClientRect().right - subtructBoardWidth;
 
     if (coordX + 470 > endPoint) {
-      coordX -= 256;
+      coordX -= 275;
       reverse = true;
     }
     setContextmenuCoords({
@@ -318,22 +642,21 @@ const VariationsNew = (props) => {
     setShowMenu(true);
   };
 
-  useEffect(() => {
-    const identifier = setTimeout(() => {
-      document.addEventListener('contextmenu', handleContextMenu, true);
-    }, 1000);
-
-    return () => {
-      clearTimeout(identifier);
-      document.removeEventListener('contextmenu', handleContextMenu, true);
-    };
-  });
-
   const container = getPgnLines(
     moves,
     activeMove,
     setActiveMove,
-    symbolModeEnabled
+    symbolModeEnabled,
+    handleContextMenu,
+    setContextmenuCoords,
+    setShowMenu,
+    editComment,
+    setEditComment,
+    refInput,
+    refInputText,
+    newComment,
+    setNewComment,
+    addCommentToMove
   );
   const [rowIndx, setRowIndx] = useState(container.length);
 
@@ -342,17 +665,19 @@ const VariationsNew = (props) => {
       container.forEach((elem, indx) => {
         if (elem.type === 'li') {
           elem.props.children.forEach((child) => {
-            if (
-              child.type === 'button' &&
+            const childActive =
               child.props &&
-              child.props.className === 'active'
-            ) {
-              setRowIndx(indx);
-            } else if (
+              child.props.children &&
+              child.props.children[0] &&
+              child.props.children[0].props &&
+              child.props.children[0].props.id == activeMove.move_id;
+
+            const directActive =
               child.type === 'span' &&
-              child.props.children.props &&
-              child.props.children.props.className === 'active'
-            ) {
+              child.props.children[0].props &&
+              child.props.children[0].props.id == activeMove.move_id;
+
+            if (directActive || childActive) {
               setRowIndx(indx);
             } else if (
               child.type === 'span' &&
@@ -361,7 +686,11 @@ const VariationsNew = (props) => {
               typeof child.props.children !== 'string'
             ) {
               child.props.children.forEach((subChild) => {
-                if (subChild.props.className === 'active') {
+                if (
+                  subChild.props &&
+                  subChild.props.id &&
+                  subChild.props.id === activeMove.move_id
+                ) {
                   setRowIndx(indx);
                 }
               });
@@ -370,10 +699,13 @@ const VariationsNew = (props) => {
         }
       });
     }
-  }, [activeMove]);
+  }, [activeMove, editComment]);
 
   const rowRenderHandler = () => {
-    if (rowIndx !== null) scrollRef.current.scrollToRow(rowIndx);
+    if (rowIndx !== null) {
+      scrollRef.current.scrollToRow(rowIndx);
+      setRowIndx(null);
+    }
   };
 
   const onScrollHandler = () => {
@@ -397,7 +729,11 @@ const VariationsNew = (props) => {
     );
   };
   return (
-    <div ref={contextRef} className="variations-container">
+    <div
+      ref={contextRef}
+      className={`variations-container ${fromRef ? 'shorter-height' : 'normal-height'
+        }`}
+    >
       <PopularPositionMatched />
       <AutoSizer>
         {({ width, height }) => {
@@ -422,4 +758,5 @@ const VariationsNew = (props) => {
 
 export default connect(mapStateToProps, {
   setActiveMove,
+  addCommentToMove,
 })(VariationsNew);

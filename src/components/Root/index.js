@@ -1,26 +1,44 @@
 import React from 'react';
 import { connect } from 'react-redux';
 import { ThemeContext, themes } from '../../contexts/ThemeContext';
-import { setColorMode } from '../../../src/utils/api';
+import { setDashboardSettings } from '../../../src/utils/api';
+import { getUserAccount } from '../../actions/cloud';
 import Toggle from '../Toggle';
 
 const mapStateToProps = (state) => {
   return {
-    userFullInfo: state.cloud.userFullInfo,
+    userInfo: state.cloud.userInfo,
   };
 };
 
-const RootToggle = ({ userFullInfo }) => (
+const RootToggle = ({ userInfo, getUserAccount }) => (
+
   <ThemeContext.Consumer>
     {({ theme, setTheme }) => (
       <Toggle
         onChange={() => {
           if (theme === themes.light) {
-            setColorMode(userFullInfo.token, userFullInfo.userProfileId, true);
+            setDashboardSettings(userInfo.token, true, userInfo.arrows_enabled, userInfo.board_theme, userInfo.pieces_theme)
+              .then((response) => {
+                if (response) {
+                  if (userInfo.username === response.user.username) {
+                      delete response.user
+                  }
+                  getUserAccount({ ...userInfo, ...response })
+              }
+              });
             setTheme(themes.dark);
           }
           if (theme === themes.dark) {
-            setColorMode(userFullInfo.token, userFullInfo.userProfileId, false);
+            setDashboardSettings(userInfo.token, false, userInfo.arrows_enabled, userInfo.board_theme, userInfo.pieces_theme)
+              .then((response) => {
+                if (response) {
+                  if (userInfo.username === response.user.username) {
+                      delete response.user
+                  }
+                  getUserAccount({ ...userInfo, ...response })
+              }
+              })
             setTheme(themes.light);
           }
         }}
@@ -29,4 +47,4 @@ const RootToggle = ({ userFullInfo }) => (
     )}
   </ThemeContext.Consumer>
 );
-export default connect(mapStateToProps, null)(RootToggle);
+export default connect(mapStateToProps, { getUserAccount })(RootToggle);

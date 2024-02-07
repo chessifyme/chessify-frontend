@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Table from 'react-bootstrap/Table';
 import {
   RiEdit2Line,
+  RiFileEditLine,
   RiUpload2Line,
   RiDeleteBinFill,
   RiFileDownloadLine,
 } from 'react-icons/ri';
+import { cloneDeep } from 'lodash';
 import {
   setActiveFile,
   setPgn,
-  uploadFiles,
   setLoader,
   deleteFiles,
   addPgnToArr,
@@ -20,6 +21,10 @@ import { getFiles, getPgnTags } from '../../utils/api';
 import FileInfoModal from './FileInfoModal';
 import DeleteFilesModal from './DeleteFilesModal';
 import { convertResult } from '../../utils/pgn-viewer';
+import useKeyPress from './KeyPress';
+import PreviewSection from './PreviewSecton';
+import EditFileNameModal from './EditFileNameModal';
+import { useNavigate } from 'react-router-dom';
 
 const mapStateToProps = (state) => {
   return {
@@ -28,6 +33,7 @@ const mapStateToProps = (state) => {
     currentDirectory: state.board.currentDirectory,
     loader: state.board.loader,
     activeFileInfo: state.board.activeFileInfo,
+    uploadFilterByPos: state.board.uploadFilterByPos,
   };
 };
 
@@ -43,11 +49,18 @@ const Items = ({
   downloadFileHandler,
   deleteFileHandler,
   loader,
+  clickedFileIndx,
+  clickedFileRef,
+  itemOffset,
+  changeFileNameHandler,
+  allLoadIsOn,
 }) => {
   return (
     <>
       {uploadedFilesCurrent &&
         uploadedFilesCurrent.map((file, index) => {
+          const itemProps =
+            index === clickedFileIndx ? { ref: clickedFileRef } : {};
           return (
             <tr
               className={`uploaded-files ${
@@ -56,14 +69,20 @@ const Items = ({
                 file.key &&
                 file.key === activeFileInfo.file.key
                   ? 'activeFile'
+                  : clickedFileIndx !== null && clickedFileIndx === index
+                  ? 'clickedFile'
                   : ''
               }`}
               key={file.key + Math.random()}
               onClick={(event) =>
-                setActiveFileHandler(event, file, currentDirectory)
+                setActiveFileHandler(event, file, currentDirectory, index)
               }
+              {...itemProps}
             >
-              <td>{file.key.split('/')[2]}</td>
+              <td className="file-name" title={file.key.split('/')[2]}>
+                <span>{index + 1 + itemOffset}.</span>
+                {file.key.split('/')[2]}
+              </td>
               <td>
                 {pgnInfo[file.id] &&
                 pgnInfo[file.id].date &&
@@ -95,13 +114,24 @@ const Items = ({
               <td className="editing-col">
                 <div className="d-flex flex-row">
                   <>
-                    {loader === file.key + '-editLoad' ? (
+                    <RiEdit2Line
+                      className="edit-file"
+                      title="Edit File Name"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        changeFileNameHandler(file);
+                      }}
+                    />
+                  </>
+                  <>
+                    {loader === file.key + '-editLoad' || allLoadIsOn ? (
                       <div className="circle-loader"></div>
                     ) : (
-                      <RiEdit2Line
+                      <RiFileEditLine
                         className="edit-file"
                         title="Edit Info"
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           editFileInfoHandler(file);
                         }}
                       />
@@ -114,8 +144,9 @@ const Items = ({
                       <RiUpload2Line
                         className="edit-file"
                         title="Set to notation"
-                        onClick={() => {
-                          setFilePgn(file, currentDirectory);
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setFilePgn(file, currentDirectory, false);
                         }}
                       />
                     )}
@@ -127,7 +158,8 @@ const Items = ({
                       <RiFileDownloadLine
                         className="edit-file"
                         title="Download File"
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           downloadFileHandler(file, currentDirectory);
                         }}
                       />
@@ -140,7 +172,8 @@ const Items = ({
                       <RiDeleteBinFill
                         className="edit-file"
                         title="Delete File"
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           deleteFileHandler(file);
                         }}
                       />
@@ -162,15 +195,16 @@ const UploadedFiles = ({
   loader,
   setLoader,
   activeFileInfo,
-  pgnStr,
   deleteFiles,
-  userFullInfo,
-  setActiveTab,
+  userInfo,
   uploadProgress,
   tourType,
   tourStepNumber,
   setTourNextStep,
   addPgnToArr,
+  uploadFilterByPos,
+  fen,
+  sortByName,
 }) => {
   const [openEditModal, setOpenEditModal] = useState(false);
   const [editingFile, setEditingFile] = useState({
@@ -182,6 +216,7 @@ const UploadedFiles = ({
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [deletingFile, setDeletingFile] = useState('');
   const [pgnInfo, setPgnInfo] = useState({});
+  const [activeVarOpt, setActiveVarOpt] = useState(false);
 
   const itemsPerPage = 20;
   const [itemOffset, setItemOffset] = useState(0);
@@ -194,6 +229,16 @@ const UploadedFiles = ({
     userUploadedFiles && userUploadedFiles[currentDirectory]
       ? Math.ceil(userUploadedFiles[currentDirectory].length / itemsPerPage)
       : 0;
+  const [clickedFileIndx, setClickedFileIndx] = useState(null);
+  const arrowUpPressed = useKeyPress(38);
+  const arrowDownPressed = useKeyPress(40);
+  const clickedFileRef = useRef(null);
+  const containerRef = useRef(null);
+  const [previewPgnStr, setPreviewPgnStr] = useState('');
+  const [openEditNameModal, setOpenEditNameModal] = useState(false);
+  const [editNameFile, setEditNameFile] = useState({});
+  const [allLoadIsOn, setAllLoadIsOn] = useState(false);
+  const navigate = useNavigate();
 
   const handlePageClick = (event) => {
     const newOffset =
@@ -203,35 +248,131 @@ const UploadedFiles = ({
   };
 
   useEffect(() => {
+    let pgnIDs = [];
+    let respInfo = {};
     userUploadedFiles &&
       userUploadedFiles[currentDirectory] &&
       uploadedFilesCurrent.forEach((file) => {
-        setLoader(file.key + '-editLoad');
-        getPgnTags(file.id, userFullInfo.token).then((response) => {
-          setPgnInfo((pgnInfo) => {
-            return {
-              ...pgnInfo,
-              [file.id]: response,
-            };
-          });
-          setLoader('');
-          if (tourType === 'analyze' && tourStepNumber === 4) {
-            setTourNextStep();
-          }
-        });
+        pgnIDs.push(file.id);
       });
-  }, [currentDirectory, openEditModal, itemOffset]);
+    setAllLoadIsOn(true);
+    if(pgnIDs.length !== 0) {
+      getPgnTags(pgnIDs, userInfo.token).then((response) => {
+        response.forEach((info, indx) => {
+          respInfo[pgnIDs[indx]] = info;
+        });
+        setPgnInfo(respInfo);
+        setAllLoadIsOn(false);
+        if (tourType === 'analyze' && tourStepNumber === 4) {
+          setTourNextStep();
+        }
+      });
+    }
+  }, [
+    currentDirectory,
+    openEditModal,
+    itemOffset,
+    sortByName,
+    userUploadedFiles,
+  ]);
 
-  async function setFilePgn(file, currentDirectory) {
-    setLoader(file.key + '-setNotLoad');
-    getFiles(file.id, file.path, userFullInfo.token).then((fileContent) => {
-      addPgnToArr(fileContent, file);
-      setActiveFile(fileContent, file, currentDirectory);
-      setActiveTab(0);
-      setLoader('');
-      if (tourType === 'analyze' && tourStepNumber === 5) {
-        setTourNextStep();
+  useEffect(() => {
+    if (
+      !arrowDownPressed &&
+      !activeVarOpt &&
+      clickedFileIndx !== null &&
+      uploadedFilesCurrent[clickedFileIndx + 1]
+    ) {
+      setClickedFileIndx(clickedFileIndx + 1);
+    }
+  }, [arrowDownPressed]);
+
+  useEffect(() => {
+    if (
+      !arrowUpPressed &&
+      !activeVarOpt &&
+      clickedFileIndx !== null &&
+      uploadedFilesCurrent[clickedFileIndx - 1]
+    ) {
+      setClickedFileIndx(clickedFileIndx - 1);
+    }
+  }, [arrowUpPressed]);
+
+  const checkIsVisible = (elem, container) => {
+    const elemTop = elem.current.getBoundingClientRect().top;
+    const elemBottom = elemTop + elem.current.clientHeight;
+
+    const containerTop = container.current.getBoundingClientRect().top;
+    const containerBottom = containerTop + container.current.clientHeight;
+
+    return elemTop > containerTop && elemBottom < containerBottom;
+  };
+
+  useEffect(() => {
+    if (clickedFileIndx !== null) {
+      const inViewport = checkIsVisible(clickedFileRef, containerRef);
+      if (!inViewport) {
+        clickedFileRef.current.scrollIntoView({ behavior: 'instant' });
       }
+    }
+  }, [clickedFileIndx]);
+
+  useEffect(() => {
+    const identifier = setTimeout(() => {
+      if (clickedFileIndx !== null) {
+        setFilePgn(
+          uploadedFilesCurrent[clickedFileIndx],
+          currentDirectory,
+          true
+        );
+      }
+    }, 500);
+
+    return () => {
+      clearTimeout(identifier);
+    };
+  }, [clickedFileIndx]);
+
+  let uploadedFilesCurr = cloneDeep(userUploadedFiles[currentDirectory]);
+
+  if (userUploadedFiles && userUploadedFiles[currentDirectory] && sortByName) {
+    const collator = new Intl.Collator(undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    uploadedFilesCurr = uploadedFilesCurr.sort(function (a, b) {
+      return collator.compare(a.key, b.key);
+    });
+  }
+  if (
+    userUploadedFiles &&
+    userUploadedFiles[currentDirectory] &&
+    uploadedFilesCurr.length
+  ) {
+    uploadedFilesCurr = uploadedFilesCurr.slice(itemOffset, endOffset);
+  }
+
+  async function setFilePgn(file, currentDirectory, preview) {
+    setLoader(file.key + '-setNotLoad');
+    if (file.previewInfo && !preview) {
+      addPgnToArr(file.previewInfo.pgnStr, file);
+      setActiveFile(file.previewInfo.pgnStr, file, currentDirectory);
+      navigate({ pathname: "/analysis"});
+      setLoader('');
+      return;
+    }
+    getFiles(file.id, file.path, userInfo.token).then((fileContent) => {
+      if (!preview) {
+        addPgnToArr(fileContent, file);
+        setActiveFile(fileContent, file, currentDirectory);
+        navigate({ pathname: "/analysis"});
+        if (tourType === 'analyze' && tourStepNumber === 5) {
+          setTourNextStep();
+        }
+      } else {
+        setPreviewPgnStr(fileContent);
+      }
+      setLoader('');
     });
   }
 
@@ -251,10 +392,12 @@ const UploadedFiles = ({
 
   const downloadFileHandler = (file) => {
     setLoader(file.key + '-downloadLoad');
-    getFiles(file.id, file.path, userFullInfo.token).then((fileContent) => {
+    getFiles(file.id, file.path, userInfo.token).then((fileContent) => {
+      const regex = /(\n\[\s*FEN\s*((\"\s*\")|(\'\s*\'))\])/gm;
+      let cleanContent = fileContent.replace(regex, '');
       let element = window.document.createElement('a');
       element.href = window.URL.createObjectURL(
-        new Blob([fileContent], { type: 'application/vnd.chess-pgn' })
+        new Blob([cleanContent], { type: 'application/vnd.chess-pgn' })
       );
       const name = file.key.split('/')[2];
 
@@ -268,26 +411,37 @@ const UploadedFiles = ({
     });
   };
 
-  const setActiveFileHandler = (event, file, currentDirectory) => {
-    if (event.detail === 2) {
-      setFilePgn(file, currentDirectory);
+  const setActiveFileHandler = (event, file, currentDirectory, index) => {
+    if (event.detail === 1) {
+      setClickedFileIndx(index);
+      setFilePgn(file, currentDirectory, true);
+      return;
     }
+    if (event.detail >= 2) {
+      setFilePgn(file, currentDirectory, false);
+      return;
+    }
+  };
+
+  const changeFileNameHandler = (file) => {
+    setEditNameFile(file);
+    setOpenEditNameModal(true);
   };
 
   return (
     <>
       {uploadProgress.percent !== null && uploadProgress.percent >= 0 ? (
         <div className="uploads-progress">
-          <div class="progress position-relative">
+          <div className="progress position-relative">
             <div
-              class="progress-bar"
+              className="progress-bar"
               role="progressbar"
               style={{ width: `${uploadProgress.percent}%` }}
               aria-valuenow={uploadProgress.percent}
               aria-valuemin="0"
               aria-valuemax="100"
             ></div>
-            <small class="justify-content-center d-flex position-absolute w-100">
+            <small className="justify-content-center d-flex position-absolute w-100">
               {uploadProgress.message}
             </small>
           </div>
@@ -297,7 +451,7 @@ const UploadedFiles = ({
           id={`${
             tourType === 'analyze' && tourStepNumber === 5 ? 'uploadedFile' : ''
           }`}
-          className="scroll"
+          className="scroll uploaded-files-table"
           hover
         >
           <thead>
@@ -310,7 +464,7 @@ const UploadedFiles = ({
               <th className="editing-col-th"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={containerRef}>
             {loader === 'fileLoader' ? (
               <tr className="isLoading">
                 <td>
@@ -330,7 +484,7 @@ const UploadedFiles = ({
             userUploadedFiles[`${currentDirectory}`] ? (
               <>
                 <Items
-                  uploadedFilesCurrent={uploadedFilesCurrent}
+                  uploadedFilesCurrent={uploadedFilesCurr}
                   setActiveFileHandler={setActiveFileHandler}
                   activeFileInfo={activeFileInfo}
                   currentDirectory={currentDirectory}
@@ -344,6 +498,11 @@ const UploadedFiles = ({
                   tourType={tourType}
                   tourStepNumber={tourStepNumber}
                   setTourNextStep={setTourNextStep}
+                  clickedFileIndx={clickedFileIndx}
+                  clickedFileRef={clickedFileRef}
+                  itemOffset={itemOffset}
+                  changeFileNameHandler={changeFileNameHandler}
+                  allLoadIsOn={allLoadIsOn}
                 />
                 {userUploadedFiles[`${currentDirectory}`].length <=
                 itemsPerPage ? (
@@ -376,7 +535,7 @@ const UploadedFiles = ({
         setIsOpen={setOpenEditModal}
         editingFile={editingFile}
         setLoader={setLoader}
-        userFullInfo={userFullInfo}
+        userInfo={userInfo}
       />
       <DeleteFilesModal
         isOpen={openDeleteModal}
@@ -385,9 +544,33 @@ const UploadedFiles = ({
         setSelectedFiles={setDeletingFile}
         deleteFiles={deleteFiles}
         isFile={true}
-        userFullInfo={userFullInfo}
+        userInfo={userInfo}
         setLoader={setLoader}
       />
+      <EditFileNameModal
+        isOpen={openEditNameModal}
+        setIsOpen={setOpenEditNameModal}
+        selectedFile={editNameFile}
+      />
+      {clickedFileIndx !== null &&
+      uploadedFilesCurr &&
+      uploadedFilesCurr[clickedFileIndx] &&
+      previewPgnStr.length ? (
+        <PreviewSection
+          userInfo={userInfo}
+          previewFile={uploadedFilesCurr[clickedFileIndx]}
+          previewPgnStr={previewPgnStr}
+          activeVarOpt={activeVarOpt}
+          setActiveVarOpt={setActiveVarOpt}
+          setClickedFileIndx={setClickedFileIndx}
+          currentDirectory={currentDirectory}
+          setFilePgn={setFilePgn}
+          uploadFilterByPos={uploadFilterByPos}
+          fen={fen}
+        />
+      ) : (
+        <></>
+      )}
     </>
   );
 };
@@ -395,7 +578,6 @@ const UploadedFiles = ({
 export default connect(mapStateToProps, {
   setPgn,
   setActiveFile,
-  uploadFiles,
   setLoader,
   deleteFiles,
   addPgnToArr,

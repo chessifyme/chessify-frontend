@@ -83,10 +83,24 @@ export function deleteMoveNag(move) {
   };
 }
 
-export function addCommentToMove(move, comment) {
+export function addCommentToMove(move, comment, commentIndx) {
   return {
     type: BOARD_ACTION_TYPES.ADD_COMMENT_TO_MOVE,
-    payload: { move, comment },
+    payload: { move, comment, commentIndx },
+  };
+}
+
+export function addCommandToMove(move, command) {
+  return {
+    type: BOARD_ACTION_TYPES.ADD_COMMAND_TO_MOVE,
+    payload: { move, command },
+  };
+}
+
+export function addCommandToHeader(command) {
+  return {
+    type: BOARD_ACTION_TYPES.ADD_COMMAND_TO_HEADER,
+    payload: { command },
   };
 }
 
@@ -108,13 +122,6 @@ export function setMoveLoader(moveLoader) {
   return {
     type: BOARD_ACTION_TYPES.SET_MOVE_LOADER,
     payload: { moveLoader },
-  };
-}
-
-export function setGameRefLoader(gameRefLoader) {
-  return {
-    type: BOARD_ACTION_TYPES.SET_GAME_REF_LOADER,
-    payload: { gameRefLoader },
   };
 }
 
@@ -166,6 +173,21 @@ export function createFolder(path, name, userInfo) {
     payload: { path, name, userInfo },
   };
 }
+
+export function editFolderName(oldName, newName, userInfo) {
+  return {
+    type: BOARD_ACTION_TYPES.EDIT_FOLDER_NAME,
+    payload: { oldName, newName, userInfo },
+  };
+}
+
+export function editFileName(id, newName, userInfo) {
+  return {
+    type: BOARD_ACTION_TYPES.EDIT_FILE_NAME,
+    payload: { id, newName, userInfo },
+  };
+}
+
 
 export function deleteFiles(files, folders, userInfo) {
   return {
@@ -272,6 +294,41 @@ export function restoreAllPgnArr(allPgnArr, activePgnTab, analysisNotationTab) {
   };
 }
 
+export function applyFullAnalysisOnPGN() {
+  return {
+    type: BOARD_ACTION_TYPES.APPLY_FULL_ANALYSIS_ON_PGN,
+    payload: {},
+  };
+}
+
+export function setSwitchedTabAnalyzingFen(analyzingFen) {
+  return {
+    type: BOARD_ACTION_TYPES.SET_SWITCHED_TAB_ANALYZING_FEN,
+    payload: { analyzingFen },
+  };
+}
+
+export function setLichessDB(searchParams, setIsLoading) {
+  return {
+    type: BOARD_ACTION_TYPES.SET_LICHESS_DB,
+    payload: { searchParams, setIsLoading },
+  };
+}
+
+export function setChessAIResponse() {
+  return {
+    type: BOARD_ACTION_TYPES.SET_CHESS_AI_RESPONSE,
+    payload: {},
+  };
+}
+
+export function setNavigationGamesInfo(indent, reset) {
+  return {
+    type: BOARD_ACTION_TYPES.SET_NAV_GAMES_INFO,
+    payload: { indent, reset },
+  };
+}
+
 export default {
   setFen,
   setInitialPgn,
@@ -288,7 +345,6 @@ export default {
   setReference,
   setGameReference,
   setMoveLoader,
-  setGameRefLoader,
   setVariationOpt,
   setActiveFile,
   setUserUploads,
@@ -296,6 +352,7 @@ export default {
   setCurrentDirectory,
   setLoader,
   createFolder,
+  editFolderName,
   deleteFiles,
   setUploadLimitExceeded,
   setUploadSizeExceeded,
@@ -311,4 +368,5 @@ export default {
   changeTabName,
   setAnalyzingFenTabIndx,
   restoreAllPgnArr,
+  setSwitchedTabAnalyzingFen,
 };

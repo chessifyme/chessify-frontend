@@ -1,8 +1,10 @@
-<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 21" width="20" height="21">
-	<title>redo (copy)-svg</title>
-	<style>
-		.s0 { fill: none;stroke: #959d99;stroke-linecap: round;stroke-linejoin: round;stroke-width: 1.2 } 
-	</style>
-	<path id="Layer" class="s0" d="m7.7 8.4h-3v-3"/>
-	<path id="Layer" class="s0" d="m5.3 7.7l1.3-1.3c0.8-0.8 1.8-1.4 2.9-1.5 1.1-0.2 2.2 0 3.2 0.6 1 0.5 1.7 1.4 2.2 2.5 0.4 1 0.5 2.2 0.3 3.3-0.2 1.1-0.8 2.2-1.7 2.9-0.8 0.7-1.9 1.2-3 1.3-1.1 0-2.2-0.3-3.1-0.9-0.9-0.7-1.6-1.6-2-2.7"/>
+
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="1000" height="1000" viewBox="0 0 1000 1000" xml:space="preserve">
+<desc>Created with Fabric.js 3.5.0</desc>
+<defs>
+</defs>
+<rect x="0" y="0" width="100%" height="100%" fill="transparent"/>
+<g transform="matrix(0.9275 0 0 0.8072 499.9996 475.5363)" id="535917">
+<path style="stroke: none; stroke-width: 1; stroke-dasharray: none; stroke-linecap: butt; stroke-dashoffset: 0; stroke-linejoin: miter; stroke-miterlimit: 4; is-custom-font: none; font-file-url: none; fill: rgb(149,157,153); fill-rule: nonzero; opacity: 1;" vector-effect="non-scaling-stroke" transform=" translate(-500, -500)" d="M 751.8 930.3 l -430 -430 L 752.4 69.7 c 13.7 -13.7 13.7 -35.8 0 -49.5 c -13.7 -13.7 -35.8 -13.7 -49.5 0 L 247.6 475.6 c -13.7 13.7 -13.7 35.8 0 49.5 l 454.7 454.7 c 13.7 13.7 35.8 13.7 49.5 0 C 765.5 966.1 765.5 943.9 751.8 930.3 L 751.8 930.3 z" stroke-linecap="round"/>
+</g>
 </svg>

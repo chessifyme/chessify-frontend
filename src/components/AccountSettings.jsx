@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import React, { useEffect, useState } from 'react';
+import { FaEye, FaEyeSlash, FaArrowLeft } from 'react-icons/fa';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { connect } from 'react-redux';
 import {
   setIsSavedPasswordModalOpen,
@@ -13,6 +14,7 @@ import {
   changePassword,
   updateUser,
 } from '../utils/api';
+import { getUserAccount } from '../actions/cloud';
 
 const AccountSettings = ({
   userInfo,
@@ -20,35 +22,36 @@ const AccountSettings = ({
   isResetPasswordModalOpen,
   setIsSavedPasswordModalOpen,
   setIsResetPasswordModalOpen,
+  getUserAccount,
 }) => {
   const [isOpenEmailEditing, setOpenEmailEditing] = useState(false);
   const [isOpenPasswordEditing, setOpenPasswordEditing] = useState(false);
   const [newEmail, setNewEmail] = useState('');
-  const [email, setEmail] = useState(userInfo.email);
+  const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState('');
   const [currentPassword, setcurrentPassword] = useState('');
-  const [firstName, setFirstName] = useState(userInfo.first_name);
-  const [lastName, setLastName] = useState(userInfo.last_name);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [newPasswordShown, setNewPasswordShown] = useState(false);
   const [currentPasswordShown, setCurrentPasswordShown] = useState(false);
   const [openClipboardToolTip, setOpen] = useState(false);
   const [openClipboardToolTipMobile, setOpenToolTipMobile] = useState(false);
   const [errors, setErrors] = useState({});
   const [isResetRequestSent, setResetRequestSent] = useState(false);
-  const [fideTitle, setFideTitle] = useState(
-    userInfo.fide_title ? userInfo.fide_title : 'NONE'
-  );
-  const [elo, setElo] = useState(
-    userInfo.elo_rating ? userInfo.elo_rating : '1000'
-  );
+  const [fideTitle, setFideTitle] = useState('');
+  const [elo, setElo] = useState('');
   const newPasswordFieldEye = newPasswordShown ? <FaEye /> : <FaEyeSlash />;
   const currentPasswordFieldEye = currentPasswordShown ? (
     <FaEye />
   ) : (
     <FaEyeSlash />
   );
+
   const [changePassError, setChangePassError] = useState('');
   const [changeOldPassError, setChangeOldPassError] = useState('');
+  const [loader, setLoader] = useState(false);
+  const navigate = useNavigate();
+  const { pathname, search } = useLocation();
 
   function handleSubmit() {
     const data = {
@@ -136,7 +139,7 @@ const AccountSettings = ({
         email: newEmail,
       };
 
-      return updateUser(userData, userInfo.userProfileId, userInfo.token).then(
+       updateUser(userData, userInfo.token).then(
         () => {
           setEmail(newEmail);
           setOpenEmailEditing(false);
@@ -157,8 +160,7 @@ const AccountSettings = ({
       old_password: currentPassword,
     };
     const index = userInfo.userCode.indexOf('*');
-    const id = userInfo.userCode.substr(index + 1);
-    changePassword(data, id, userInfo.token).then((response) => {
+    changePassword(data, userInfo.token).then((response) => {
       if (response.old_password) {
         oldPasswordField.classList.add('error');
         setTimeout(() => {
@@ -224,282 +226,318 @@ const AccountSettings = ({
   }
 
   function submitButtonAction() {
+    setLoader(true);
     let userData = {
-      first_name: firstName,
-      last_name: lastName,
+      first_name:firstName,
+      last_name: lastName ,
       fide_title: fideTitle,
-      elo_rating: elo,
-      email: newEmail ? newEmail : userInfo.email,
+      elo_rating:  elo,
+      email: email, 
     };
-
-    return updateUser(userData, userInfo.userProfileId, userInfo.token).then(
-      () => {
-        window.location.reload();
+     updateUser(userData, userInfo.token).then(
+      (response) => {
+        if(response){       
+          const user ={...response.user};
+          delete response.user
+          getUserAccount({...userInfo, ...response, ...user})
+        }
+        
+        setLoader(false);
       }
     );
   }
+  const changePath = (e) => {
+    e.preventDefault();
+    window.scrollTo(0, 0);
+    navigate({ pathname: `/analysis`});
+  };
+  useEffect(()=>{
+      setFirstName(userInfo.first_name)
+      setLastName(userInfo.last_name)
+      setEmail(userInfo.email)
+      setFideTitle(userInfo.fide_title)
+      setElo(userInfo.elo_rating)
+  }, [userInfo])
 
   return (
-    <div className="user-account-body" id="userAccountBody">
-      <h3 className="user-account-title">Account Settings</h3>
-      <div className="user-account_input-groups">
-        <label htmlFor="lastName">
-          Last name
-          <input
-            id="lastName"
-            className="user-account-inputs"
-            value={lastName}
-            placeholder="Last name"
-            onChange={updateLastNameInput}
-          />
-        </label>
-        <label htmlFor="firstName">
-          First name
-          <input
-            id="firstName"
-            className="user-account-inputs"
-            value={firstName}
-            placeholder="First name"
-            onChange={updateFirstNameInput}
-          />
-        </label>
-      </div>
-      <div className="user-account_input-groups">
-        <label htmlFor="fide">
-          FIDE title
-          <select
-            className="user-account-inputs"
-            id="fide"
-            name="fide"
-            value={fideTitle}
-            onChange={updateFideTitleSelect}
-          >
-            <option value="NONE">NONE</option>
-            <option value="GM">GM</option>
-            <option value="IM">IM</option>
-            <option value="FM">FM</option>
-            <option value="WGM">WGM</option>
-            <option value="WIM">WIM</option>
-          </select>
-        </label>
-        <label htmlFor="elo">
-          Elo rating
-          <input
-            id="elo"
-            type="number"
-            value={elo}
-            placeholder="Elo"
-            min="1000"
-            className="user-account-inputs"
-            onChange={updateEloInput}
-          />
-        </label>
-      </div>
-      <div>
-        <div className="line user-account-line"></div>
-        {isOpenEmailEditing ? (
-          <>
+    <>
+      <button className="back_to_dashboard_mob" onClick={changePath}>
+        Go to Dashboard
+      </button>
+      <div className="user-account-body" id="userAccountBody">
+        <h3 className="user-account-title">Account Settings</h3>
+        <div className="user-account_input-groups">
+          <label htmlFor="lastName">
+            Last name
+            <input
+              id="lastName"
+              className="user-account-inputs"
+              value={lastName}
+              placeholder="Last name"
+              onChange={updateLastNameInput}
+            />
+          </label>
+          <label htmlFor="firstName">
+            First name
+            <input
+              id="firstName"
+              className="user-account-inputs"
+              value={firstName}
+              placeholder="First name"
+              onChange={updateFirstNameInput}
+            />
+          </label>
+        </div>
+        <div className="user-account_input-groups">
+          <label htmlFor="fide">
+            FIDE title
+            <select
+              className="user-account-inputs"
+              id="fide"
+              name="fide"
+              value={fideTitle}
+              onChange={updateFideTitleSelect}
+            >
+              <option value="NONE">NONE</option>
+              <option value="GM">GM</option>
+              <option value="IM">IM</option>
+              <option value="FM">FM</option>
+              <option value="WGM">WGM</option>
+              <option value="WIM">WIM</option>
+            </select>
+          </label>
+          <label htmlFor="elo">
+            Elo rating
+            <input
+              id="elo"
+              type="number"
+              value={elo}
+              placeholder="Elo"
+              min="1000"
+              className="user-account-inputs"
+              onChange={updateEloInput}
+            />
+          </label>
+        </div>
+        <div>
+          <div className="line user-account-line"></div>
+          {isOpenEmailEditing ? (
+            <>
+              <div>
+                <h5 className="user-account-subTitle">Email Address</h5>
+                <div className="user-account-email">
+                  <span>You can chose email address on fields</span>
+                  <button className="hide-btn" onClick={changeEmailAction}>
+                    Hide
+                  </button>
+                </div>
+              </div>
+              <div className="user-account_input-groups">
+                <label htmlFor="newEmail">
+                  New email address
+                  <input
+                    id="newEmail"
+                    className="user-account-inputs"
+                    value={newEmail}
+                    placeholder="Email"
+                    onChange={updateNewEmailInput}
+                  />
+                </label>
+                <label htmlFor="currentEmail">
+                  Current email address
+                  <input
+                    id="currentEmail"
+                    className="user-account-inputs"
+                    value={email}
+                    disabled={true}
+                  />
+                </label>
+              </div>
+              <button className="green-btn" onClick={updateEmail}>
+                Update email
+              </button>
+            </>
+          ) : (
             <div>
               <h5 className="user-account-subTitle">Email Address</h5>
               <div className="user-account-email">
-                <span>You can chose email address on fields</span>
-                <button className="hide-btn" onClick={changeEmailAction}>
-                  Hide
+                <p>
+                  Your email address <span>{email}</span>
+                </p>
+                <button className="change-btn" onClick={changeEmailAction}>
+                  Change email
                 </button>
               </div>
             </div>
-            <div className="user-account_input-groups">
-              <label htmlFor="newEmail">
-                New email address
-                <input
-                  id="newEmail"
-                  className="user-account-inputs"
-                  value={newEmail}
-                  placeholder="Email"
-                  onChange={updateNewEmailInput}
-                />
-              </label>
-              <label htmlFor="currentEmail">
-                Current email address
-                <input
-                  id="currentEmail"
-                  className="user-account-inputs"
-                  value={email}
-                  disabled={true}
-                />
-              </label>
-            </div>
-            <button className="green-btn" onClick={updateEmail}>
-              Update email
-            </button>
-          </>
-        ) : (
-          <div>
-            <h5 className="user-account-subTitle">Email Address</h5>
+          )}
+          <div className="line"></div>
+
+          {isOpenPasswordEditing ? (
+            <>
+              <div>
+                <div className="user-account-email">
+                  <h5 className="user-account-subTitle">Password</h5>
+                  <button className="hide-btn" onClick={changePasswordAction}>
+                    Hide
+                  </button>
+                </div>
+              </div>
+              <form onSubmit={updatePassword}>
+                <div className="user-account_input-groups">
+                  <div>
+                    <label
+                      htmlFor="newPassword"
+                      className="user-account-password"
+                    >
+                      New password
+                      <input
+                        id="newPassword"
+                        className="user-account-inputs"
+                        value={newPassword}
+                        onChange={updateNewPasswordInput}
+                        type={newPasswordShown ? 'text' : 'password'}
+                      />
+                      <i onClick={toggleNewPasswordVisibility}>
+                        {newPasswordFieldEye}
+                      </i>
+                    </label>
+                    <p className="change-pass-error">{changePassError}</p>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="currentPassword"
+                      className="user-account-password"
+                    >
+                      Current password
+                      <input
+                        id="currentPassword"
+                        className="user-account-inputs"
+                        value={currentPassword}
+                        onChange={updateCurrentPasswordInput}
+                        type={currentPasswordShown ? 'text' : 'password'}
+                      />
+                      <i onClick={toggleCurrentPasswordVisibility}>
+                        {currentPasswordFieldEye}
+                      </i>
+                    </label>
+                    <p className="change-pass-error">{changeOldPassError}</p>
+                  </div>
+                </div>
+                <div className="change-password">
+                  <button
+                    type="submit"
+                    className="green-btn"
+                    onClick={updatePassword}
+                  >
+                    Update password
+                  </button>
+                  <button className="change-btn" onClick={resetPassword}>
+                    Reset via link
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
             <div className="user-account-email">
-              <p>
-                Your email address <span>{email}</span>
-              </p>
-              <button className="change-btn" onClick={changeEmailAction}>
-                Change email
+              <h5 className="user-account-subTitle user-account-password">
+                Password
+              </h5>
+              <button className="change-btn" onClick={changePasswordAction}>
+                Change password
               </button>
             </div>
-          </div>
-        )}
-        <div className="line"></div>
+          )}
 
-        {isOpenPasswordEditing ? (
-          <>
-            <div>
+          <div className="line"></div>
+          <div>
+            <div className="user-account-email-mob-hide">
+              <h5 className="user-account-subTitle">Referral link</h5>
               <div className="user-account-email">
-                <h5 className="user-account-subTitle">Password</h5>
-                <button className="hide-btn" onClick={changePasswordAction}>
-                  Hide
-                </button>
+                <p className="referral-link-description">
+                  <span>
+                    https://chessify.me/auth/signin?ref={userInfo.userCode}
+                  </span>
+                </p>
+                <ClickAwayListener onClickAway={handleTooltipClose}>
+                  <Tooltip
+                    PopperProps={{
+                      disablePortal: true,
+                    }}
+                    open={openClipboardToolTip}
+                    disableFocusListener
+                    disableHoverListener
+                    disableTouchListener
+                    onMouseLeave={handleTooltipClose}
+                    placement="top"
+                    title="Copied to clipboard"
+                    arrow
+                  >
+                    <button className="change-btn" onClick={copyToClipboard}>
+                      Copy Link
+                    </button>
+                  </Tooltip>
+                </ClickAwayListener>
               </div>
             </div>
-            <form onSubmit={updatePassword}>
-              <div className="user-account_input-groups">
-                <div>
-                  <label
-                    htmlFor="newPassword"
-                    className="user-account-password"
-                  >
-                    New password
-                    <input
-                      id="newPassword"
-                      className="user-account-inputs"
-                      value={newPassword}
-                      onChange={updateNewPasswordInput}
-                      type={newPasswordShown ? 'text' : 'password'}
-                    />
-                    <i onClick={toggleNewPasswordVisibility}>
-                      {newPasswordFieldEye}
-                    </i>
-                  </label>
-                  <p className="change-pass-error">{changePassError}</p>
-                </div>
-                <div>
-                  <label
-                    htmlFor="currentPassword"
-                    className="user-account-password"
-                  >
-                    Current password
-                    <input
-                      id="currentPassword"
-                      className="user-account-inputs"
-                      value={currentPassword}
-                      onChange={updateCurrentPasswordInput}
-                      type={currentPasswordShown ? 'text' : 'password'}
-                    />
-                    <i onClick={toggleCurrentPasswordVisibility}>
-                      {currentPasswordFieldEye}
-                    </i>
-                  </label>
-                  <p className="change-pass-error">{changeOldPassError}</p>
-                </div>
-              </div>
-              <div className="change-password">
-                <button
-                  type="submit"
-                  className="green-btn"
-                  onClick={updatePassword}
-                >
-                  Update password
-                </button>
-                <button className="change-btn" onClick={resetPassword}>
-                  Reset via link
-                </button>
-              </div>
-            </form>
-          </>
-        ) : (
-          <div className="user-account-email">
-            <h5 className="user-account-subTitle user-account-password">
-              Password
-            </h5>
-            <button className="change-btn" onClick={changePasswordAction}>
-              Change password
-            </button>
-          </div>
-        )}
 
-        <div className="line"></div>
-        <div>
-          <div className="user-account-email-mob-hide">
-            <h5 className="user-account-subTitle">Referral link</h5>
-            <div className="user-account-email">
-              <p className="referral-link-description">
-                <span>
-                  https://chessify.me/auth/signin?ref={userInfo.userCode}
-                </span>
-              </p>
-              <ClickAwayListener onClickAway={handleTooltipClose}>
+            <div className="user-account-email-mob-show">
+              <h5 className="user-account-subTitle">Referral link</h5>
+              <ClickAwayListener onClickAway={handleMobileTooltipClose}>
                 <Tooltip
                   PopperProps={{
                     disablePortal: true,
                   }}
-                  open={openClipboardToolTip}
+                  open={openClipboardToolTipMobile}
                   disableFocusListener
                   disableHoverListener
                   disableTouchListener
-                  onMouseLeave={handleTooltipClose}
+                  onMouseLeave={handleMobileTooltipClose}
                   placement="top"
-                  title="Copied to clipboard"
+                  title={<span style={{ fontSize: "14px" }}>Copied to clipboard</span>}
                   arrow
                 >
-                  <button className="change-btn" onClick={copyToClipboard}>
+                  <button
+                    className="change-btn"
+                    onClick={copyToClipboardMobile}
+                  >
                     Copy Link
                   </button>
                 </Tooltip>
               </ClickAwayListener>
             </div>
-          </div>
 
-          <div className="user-account-email-mob-show">
-            <h5 className="user-account-subTitle">Referral link</h5>
-            <ClickAwayListener onClickAway={handleMobileTooltipClose}>
-              <Tooltip
-                PopperProps={{
-                  disablePortal: true,
-                }}
-                open={openClipboardToolTipMobile}
-                disableFocusListener
-                disableHoverListener
-                disableTouchListener
-                onMouseLeave={handleMobileTooltipClose}
-                placement="top"
-                title="Copied to clipboard"
-                arrow
-              >
-                <button className="change-btn" onClick={copyToClipboardMobile}>
-                  Copy Link
-                </button>
-              </Tooltip>
-            </ClickAwayListener>
-          </div>
-
-          <span className="referral-link-description">
-            Invite a friend to register on Chessify via your referral link and
-            get 10% cashback from their purchases.
-          </span>
-          <div className="submit-btn-div">
-            <span className="earnings">
-              Earnings: ${userInfo.referral_balance}
-              <div className="oval-div"></div>
-              <span>Referred Users: {userInfo.referred_users_count}</span>
+            <span className="referral-link-description">
+              Invite a friend to register on Chessify via your referral link and
+              get 10% cashback from their purchases.
             </span>
-            <button className="green-btn" onClick={submitButtonAction}>
-              Save
-            </button>
+            <div className="submit-btn-div">
+              <span className="earnings">
+                Earnings: ${userInfo.referral_balance}
+                <div className="oval-div"></div>
+                <span>Referred Users: {userInfo.referred_users_count}</span>
+              </span>
+              {loader ? (
+                <div className="lds-ellipsis">
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                </div>
+              ) : (
+                <button className="green-btn" onClick={submitButtonAction}>
+                  Save
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
 export default connect(null, {
   setIsSavedPasswordModalOpen,
   setIsResetPasswordModalOpen,
+  getUserAccount,
 })(AccountSettings);

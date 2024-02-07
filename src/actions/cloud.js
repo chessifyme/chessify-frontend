@@ -23,10 +23,10 @@ export function setFreeAnalyzer(freeAnalyzer) {
   };
 }
 
-export function connectToPro(proWSSChannels) {
+export function connectToPro(proWSSChannels, fullAnalysisOn = false) {
   return {
     type: CLOUD_ACTION_TYPES.CONNECT_TO_PRO,
-    payload: { proWSSChannels },
+    payload: { proWSSChannels, fullAnalysisOn },
   };
 }
 
@@ -37,17 +37,28 @@ export function updateNumPV(numPV) {
   };
 }
 
-export function getUserFullInfo(userData) {
+export function getUserAccount(userInfo) {
   return {
-    type: CLOUD_ACTION_TYPES.GET_USER_FULL_INFO,
-    payload: { userData },
+    type: CLOUD_ACTION_TYPES.GET_USER_INFO,
+    payload: { userInfo },
   };
 }
-
-export function setOrderedCores(orderedCores) {
+export function getUserServersInfo(serverInfo) {
   return {
-    type: CLOUD_ACTION_TYPES.SET_ORDERED_CORES,
-    payload: { orderedCores },
+    type: CLOUD_ACTION_TYPES.GET_USER_SERVERS_INFO,
+    payload: { serverInfo },
+  };
+}
+export function getUserNotifictionInfo(notification) {
+  return {
+    type: CLOUD_ACTION_TYPES.GET_USER_NOTIFICATION_INFO,
+    payload: { notification },
+  };
+}
+export function getUserPlansInfo(plans) {
+  return {
+    type: CLOUD_ACTION_TYPES.GET_USER_PLANS_INFO,
+    payload: { plans },
   };
 }
 
@@ -72,6 +83,55 @@ export function setPauseAnalysisUpdate(pauseAnalysisUpdate) {
   };
 }
 
+export function setComputedData(computedMoveScores) {
+  return {
+    type: CLOUD_ACTION_TYPES.SET_COMPUTED_DATA,
+    payload: { computedMoveScores },
+  };
+}
+
+export function setFullAnalysisOn(fullAnalysisOn) {
+  return {
+    type: CLOUD_ACTION_TYPES.SET_FULL_ANALYSIS_ON,
+    payload: { fullAnalysisOn },
+  };
+}
+
+export function setFullGameFenArr(fenArr) {
+  return {
+    type: CLOUD_ACTION_TYPES.SET_FULL_GAME_FEN_ARR,
+    payload: { fenArr },
+  };
+}
+
+export function setFullAnalysisDepth(fullAnalysisDepth) {
+  return {
+    type: CLOUD_ACTION_TYPES.SET_FULL_ANALYSIS_DEPTH,
+    payload: { fullAnalysisDepth },
+  };
+}
+
+export function setInitiateFullAnalysis(initiateFullAnalysis) {
+  return {
+    type: CLOUD_ACTION_TYPES.SET_INITIATE_FULL_ANALYSIS,
+    payload: { initiateFullAnalysis },
+  };
+}
+
+export function switchAnalysisColor(isColorSwitched) {
+  return {
+    type: CLOUD_ACTION_TYPES.SWITCH_ANALYSIS_COLOR,
+    payload: { isColorSwitched },
+  };
+}
+
+export function setIsGuestUser(isGuestUser) {
+  return {
+    type: CLOUD_ACTION_TYPES.SET_IS_GUEST_USER,
+    payload: { isGuestUser },
+  };
+}
+
 export default {
   setToken,
   setVideosFen,
@@ -80,8 +140,15 @@ export default {
   setFreeAnalyzer,
   connectToPro,
   updateNumPV,
-  getUserFullInfo,
-  setOrderedCores,
   setSubModal,
   setPauseAnalysisUpdate,
+  setComputedData,
+  setFullGameFenArr,
+  setFullAnalysisDepth,
+  setInitiateFullAnalysis,
+  switchAnalysisColor,
+  getUserServersInfo,
+  getUserAccount,
+  getUserNotifictionInfo,
+  getUserPlansInfo,
 };

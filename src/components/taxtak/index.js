@@ -7,16 +7,21 @@ import { setFen, setBoardOrientation, setPgn } from '../../actions/board';
 import GameFormatsModal from '../pgn-viewer/GameFormatsModal';
 import { LichessEditor } from '../../../public/assets/js/editor.min';
 import boardEditordata from '../../utils/board-editor-data';
+import MobileUndoRedo from '../pgn-viewer/MobileUndoRedo';
+import { BiExport, BiImport } from 'react-icons/bi';
+import LoginToAccessModal from '../pgn-viewer/LoginToAccessModal';
 
 const mapStateToProps = (state) => {
   return {
     fen: state.board.fen,
     orientation: state.board.orientation,
     isEditMode: state.board.isEditMode,
+    userInfo: state.board.userInfo,
   };
 };
 
 const SOUND_MODE_LS_OPTION = 'dashboard:soundMode';
+const url = new URL(window.location.href);
 
 class ChessboardWebgl extends React.Component {
   constructor(props) {
@@ -26,9 +31,13 @@ class ChessboardWebgl extends React.Component {
       editMode: false,
       soundMode: '',
       openGameFormat: false,
-      activeTab: 0,
+      activeTab:
+        url.searchParams.get('activeTab') !== null
+          ? url.searchParams.get('activeTab')
+          : 0,
       scannerImg: '',
       displayScannerImg: false,
+      loginModal: false,
     };
     this.isDialogOpened = false;
   }
@@ -48,6 +57,13 @@ class ChessboardWebgl extends React.Component {
   setScannerImg = (src) => {
     this.setState({
       scannerImg: src,
+    });
+  };
+
+  setLoginModal = () => {
+    const { loginModal } = this.state;
+    this.setState({
+      loginModal: !loginModal,
     });
   };
 
@@ -81,7 +97,6 @@ class ChessboardWebgl extends React.Component {
       this.updateSoundMode('off');
     }
   }
-
   render() {
     const {
       fen,
@@ -90,6 +105,7 @@ class ChessboardWebgl extends React.Component {
       setBoardOrientation,
       setPgn,
       isEditMode,
+      userInfo,
     } = this.props;
     const {
       soundMode,
@@ -97,116 +113,136 @@ class ChessboardWebgl extends React.Component {
       activeTab,
       scannerImg,
       displayScannerImg,
+      loginModal,
     } = this.state;
 
     return (
-      <div>
-        <main className="page-wrapper">
-          <div className="container-fluid">
-            <div
-              style={{ display: `${isEditMode ? '' : 'none'}` }}
-            >
-              <div>
-                <div
-                  className="wood4 d-flex flex-row"
-                  style={{
-                    '--zoom': 100,
-                    padding: '6px',
-                  }}
-                  data-asset-version="TDotAa"
-                  data-asset-url="https://lichess1.org"
-                >
-                  <div id="board-editor" className="is2d board-area" />
-                  {scannerImg.length && displayScannerImg ? (
-                    <div className="scanned-img-sec">
-                      <div>Scanned Image</div>
-                      <img
-                        className="scanner-img"
-                        src={scannerImg}
-                        alt="uploaded image"
-                        width={400}
-                        height={400}
-                      />
-                    </div>
-                  ) : (
-                    <></>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="dashboard-container">
+      <main className="page-wrapper">
+        <div className="container-fluid">
+          <div style={{ display: `${isEditMode ? '' : 'none'}` }}>
+            <div>
               <div
-                className={`board-area  ${
-                  !isEditMode ? '' : 'edit-board-area'
-                }`}
-              >
-                <div style={{ display: `${!isEditMode ? '' : 'none'}` }}>
-                  <NewTaxtak soundMode={soundMode} />
-                </div>
-                <div
-                  className={`d-flex flex-row mt-2  ${
-                    !isEditMode
-                      ? ' justify-content-between'
-                      : ' justify-content-center'
-                  }`}
-                >
-                  <EditArea
-                    fen={fen}
-                    orientation={orientation}
-                    setFen={setFen}
-                    setPgn={setPgn}
-                    setBoardOrientation={setBoardOrientation}
-                    updateSoundMode={this.updateSoundMode}
-                    soundMode={soundMode}
-                    setScannerImg={this.setScannerImg}
-                    scannerImg={scannerImg}
-                    setDisplayScannerImg={this.setDisplayScannerImg}
-                  />
-                  <div
-                    className="game-import-section"
-                    style={{ display: `${!isEditMode ? '' : 'none'}` }}
-                  >
-                    <button
-                      className="game-import"
-                      type="button"
-                      onClick={this.setOpenGameFormat}
-                    >
-                      <img
-                        src={require('../../../public/assets/images/pgn-viewer/import-checkmark.svg')}
-                        width="10"
-                        height="10"
-                        alt=""
-                      />
-                      Import/ Export
-                    </button>
-                  </div>
-                </div>
-                <GameFormatsModal
-                  isOpen={openGameFormat}
-                  handleModal={this.setOpenGameFormat}
-                  setActiveTabPgnViewer={this.setActiveTab}
-                  setScannerImg={this.setScannerImg}
-                />
-              </div>
-              <div
-                className="pgn-viewer-container-scroll"
+                className={`${
+                  userInfo && userInfo.board_theme
+                    ? userInfo.board_theme
+                    : 'wood4'
+                } d-flex flex-row`}
                 style={{
-                  display: `${!isEditMode ? '' : 'none'}`,
+                  '--zoom': 100,
+                  padding: '6px',
                 }}
+                data-asset-version="TDotAa"
+                data-asset-url="https://lichess1.org"
               >
-                <PgnViewer
-                  activeTab={activeTab}
-                  setActiveTab={this.setActiveTab}
-                />
+                <div id="board-editor" className="is2d board-area" />
+                {scannerImg.length && displayScannerImg ? (
+                  <div className="scanned-img-sec">
+                    <div>Scanned Image</div>
+                    <img
+                      className="scanner-img"
+                      src={scannerImg}
+                      alt="uploaded image"
+                      width={400}
+                      height={400}
+                    />
+                  </div>
+                ) : (
+                  <></>
+                )}
               </div>
             </div>
           </div>
-        </main>
-      </div>
+          <div className="dashboard-container">
+            <div
+              className={`board-area  ${!isEditMode ? '' : 'edit-board-area'}`}
+            >
+              <div style={{ display: `${!isEditMode ? '' : 'none'}` }}>
+                <NewTaxtak soundMode={soundMode} />
+              </div>
+              <div
+                className={`d-flex flex-row mt-2  ${
+                  !isEditMode
+                    ? ' justify-content-between edit-sec-mobile'
+                    : ' justify-content-center'
+                }`}
+              >
+                <EditArea
+                  fen={fen}
+                  orientation={orientation}
+                  setFen={setFen}
+                  setPgn={setPgn}
+                  setBoardOrientation={setBoardOrientation}
+                  updateSoundMode={this.updateSoundMode}
+                  soundMode={soundMode}
+                  setScannerImg={this.setScannerImg}
+                  scannerImg={scannerImg}
+                  setDisplayScannerImg={this.setDisplayScannerImg}
+                  setLoginModal={this.setLoginModal}
+                />
+
+                <div
+                  className="game-import-section"
+                  style={{ display: `${!isEditMode ? '' : 'none'}` }}
+                >
+                  <button
+                    className="game-import"
+                    type="button"
+                    onClick={this.setOpenGameFormat}
+                  >
+                    <img
+                      src={require('../../../public/assets/images/pgn-viewer/import-checkmark.svg')}
+                      width="10"
+                      height="10"
+                      alt=""
+                    />
+                    Import/ Export
+                  </button>
+                </div>
+                <div
+                  className="game-import-section-mobile"
+                  style={{ display: `${!isEditMode ? '' : 'none'}` }}
+                >
+                  <button
+                    className="game-import"
+                    type="button"
+                    onClick={this.setOpenGameFormat}
+                  >
+                    <BiExport size={18} />
+                    <BiImport size={18} />
+                  </button>
+                </div>
+                {!isEditMode ? <MobileUndoRedo /> : null}
+              </div>
+              <GameFormatsModal
+                isOpen={openGameFormat}
+                handleModal={this.setOpenGameFormat}
+                setScannerImg={this.setScannerImg}
+                setLoginModal={this.setLoginModal}
+              />
+            </div>
+            <div
+              className="pgn-viewer-container-scroll"
+              style={{
+                display: `${!isEditMode ? '' : 'none'}`,
+              }}
+            >
+              <PgnViewer
+                activeTab={activeTab}
+                setActiveTab={this.setActiveTab}
+                setScannerImg={this.setScannerImg}
+                setLoginModal={this.setLoginModal}
+              />
+            </div>
+          </div>
+        </div>
+        <LoginToAccessModal
+          isOpen={loginModal}
+          setIsOpen={this.setLoginModal}
+        />
+      </main>
     );
   }
 }
-
 export default connect(mapStateToProps, {
   setFen,
   setBoardOrientation,

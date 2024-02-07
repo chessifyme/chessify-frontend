@@ -1,8 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { connect } from 'react-redux';
+import {
+  GUEST_USER_AVAILABLE_SERVERS,
+  GUEST_USER_ENGINES_OPTION,
+} from '../../constants/cloud-params';
 import CustomDropDown from '../common/CustomDropDown';
 import SavedAnalysisArea from './SavedAnalysisArea';
-import { setOrderedCores, setSavedAnalyzeInfo } from '../../actions/cloud';
+import {
+  setSavedAnalyzeInfo,
+  connectToFree,
+  setSubModal
+} from '../../actions/cloud';
 import {
   getEnginesListFromAvailableServers,
   showAnalyzeButton,
@@ -12,28 +20,31 @@ import {
   getAvailableServers,
   getEnginesOptions,
   orderServer,
-  pingAlive,
 } from '../../utils/api';
 import { IoIosArrowBack, IoIosArrowForward } from 'react-icons/io';
 import Accordion from 'react-bootstrap/Accordion';
-import $ from 'jquery';
-import DecodeChess from '../common/DecodeChess';
 import { setAnalyzingFenTabIndx } from '../../actions/board';
+import StopAnalysisModal from './StopAnalysisModal';
+import CoinsCardModal from './CoinsCardModal';
+import { captureException } from '@sentry/react';
 
 const mapStateToProps = (state) => {
   return {
     freeAnalyzer: state.cloud.freeAnalyzer,
     proAnalyzers: state.cloud.proAnalyzers,
-    userFullInfo: state.cloud.userFullInfo,
-    orderedCores: state.cloud.orderedCores,
+    plans: state.cloud.plans,
+    serverInfo: state.cloud.serverInfo,
     savedAnalyzeInfo: state.cloud.savedAnalyzeInfo,
     activePgnTab: state.board.activePgnTab,
+    initiateFullAnalysis: state.cloud.initiateFullAnalysis,
+    mType: state.cloud.mType,
+    analyzingFenTabIndx: state.board.analyzingFenTabIndx
   };
 };
 
 const loadingOrderedServer = () => {
   return (
-    <div class="lds-ellipsis">
+    <div className="lds-ellipsis">
       <div></div>
       <div></div>
       <div></div>
@@ -48,8 +59,11 @@ const DisplayEngineOption = ({
   handleOptionChange,
   engineNameStyleClassName,
   needOption,
+  isGuestUser,
+  setLoginModal,
 }) => {
-  const [cpuctVlue, setCpuctValue] = useState();
+  const [cpuctValue, setCpuctValue] = useState();
+  const [contemptValue, setContemptValue] = useState();
   const engineOptions = enginesOptionsList[engineName];
   const optionLabels = engineOptions ? Object.keys(engineOptions) : [];
 
@@ -60,7 +74,13 @@ const DisplayEngineOption = ({
     handleEngineOptionChnage(e.target, option, engineName, type);
     setCpuctValue(e.target.value);
   };
-
+  const hnadleContemptChnage = (e, option, engineName, type) => {
+    if (e.target.value < 0 || e.target.value > 100) {
+      return;
+    }
+    handleEngineOptionChnage(e.target, option, engineName, type);
+    setContemptValue(e.target.value);
+  };
   const decrementCpuctValue = (option, engineName, type) => {
     const inputNumber = document.getElementById('cpuct');
     inputNumber.stepDown(1);
@@ -74,6 +94,22 @@ const DisplayEngineOption = ({
     inputNumber.stepUp(1);
     const val = document.getElementById('cpuct').value;
     setCpuctValue(val);
+    handleEngineOptionChnage({ value: val }, option, engineName, type);
+  };
+
+  const decrementContemptnValue = (option, engineName, type) => {
+    const inputNumber = document.getElementById('contempt');
+    inputNumber.stepDown(1);
+    const val = document.getElementById('contempt').value;
+    setContemptValue(val);
+    handleEngineOptionChnage({ value: val }, option, engineName, type);
+  };
+
+  const incrementContempValue = (option, engineName, type) => {
+    const inputNumber = document.getElementById('contempt');
+    inputNumber.stepUp(1);
+    const val = document.getElementById('contempt').value;
+    setContemptValue(val);
     handleEngineOptionChnage({ value: val }, option, engineName, type);
   };
 
@@ -100,8 +136,9 @@ const DisplayEngineOption = ({
     <div
       style={{
         display: 'flex',
-        flexDirection: 'row-reverse',
+        justifyContent: 'space-between',
         width: 'max-content',
+        flexDirection: 'row-reverse',
       }}
     >
       {optionLabels.map((option, index) => {
@@ -116,62 +153,99 @@ const DisplayEngineOption = ({
                   items={engineOptions[option].options}
                   handleEngineOptionChnage={handleEngineOptionChnage}
                   engineNameStyleClassName={engineNameStyleClassName}
+                  setLoginModal={setLoginModal}
+                  isGuestUser={isGuestUser}
                 />
               </>
             )}
+
             {engineOptions[option].type === 'number' && (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                 }}
+                className="d-flex align-items-center"
               >
                 <label
-                  style={{ margin: 0, verticalAlign: 'unset' }}
-                  for="cpuct"
+                  style={{ margin: 0 }}
+                  htmlFor={
+                    engineOptions[option].description.includes('Contempt')
+                      ? 'contempt'
+                      : 'cpuct'
+                  }
                 >
                   {option}:{' '}
                 </label>
                 <input
-                  id="cpuct"
+                  id={
+                    engineOptions[option].description.includes('Contempt')
+                      ? 'contempt'
+                      : 'cpuct'
+                  }
                   min={engineOptions[option].valid_range[0]}
                   max={engineOptions[option].valid_range[1]}
                   step="0.1"
                   type="number"
-                  value={cpuctVlue || engineOptions[option].options[0]}
+                  value={
+                    engineOptions[option].description.includes('Contempt')
+                      ? contemptValue || engineOptions[option].options[0]
+                      : cpuctValue || engineOptions[option].options[0]
+                  }
                   onChange={(e) => {
-                    hnadleCpuctChnage(
-                      e,
-                      option,
-                      engineName,
-                      engineOptions[option].type
-                    );
+                    engineOptions[option].description.includes('Contempt')
+                      ? hnadleContemptChnage(
+                        e,
+                        option,
+                        engineName,
+                        engineOptions[option].type
+                      )
+                      : hnadleCpuctChnage(
+                        e,
+                        option,
+                        engineName,
+                        engineOptions[option].type
+                      );
                   }}
                   className="option-number-input"
                 />
-                <button
-                  className="number-option-button"
-                  onClick={() => {
-                    decrementCpuctValue(
-                      option,
-                      engineName,
-                      engineOptions[option].type
-                    );
-                  }}
-                >
-                  <IoIosArrowBack />
-                </button>
-                <button
-                  className="number-option-button"
-                  onClick={() => {
-                    incrementCpuctValue(
-                      option,
-                      engineName,
-                      engineOptions[option].type
-                    );
-                  }}
-                >
-                  <IoIosArrowForward />
-                </button>
+                <div className="d-flex mr-2">
+                  <button
+                    className="number-option-button"
+                    onClick={() => {
+                      engineOptions[option].description.includes('Contempt')
+                        ? decrementContemptnValue(
+                          option,
+                          engineName,
+                          engineOptions[option].type
+                        )
+                        : decrementCpuctValue(
+                          option,
+                          engineName,
+                          engineOptions[option].type
+                        );
+                    }}
+                  >
+                    <IoIosArrowBack />
+                  </button>
+                  <button
+                    className="number-option-button"
+                    onClick={() => {
+                      engineOptions[option].description.includes('Contempt')
+                        ? incrementContempValue(
+                          option,
+                          engineName,
+                          engineOptions[option].type
+                        )
+                        : incrementCpuctValue(
+                          option,
+                          engineName,
+                          engineOptions[option].type
+                        );
+                    }}
+                  >
+                    <IoIosArrowForward />
+                  </button>
+                </div>
               </form>
             )}
           </>
@@ -180,6 +254,7 @@ const DisplayEngineOption = ({
             style={{
               display: 'flex',
               width: 'max-content',
+              alignItems: 'center',
             }}
           >
             {engineOptions[option].type === 'boolean' && (
@@ -192,9 +267,8 @@ const DisplayEngineOption = ({
                   style={{
                     margin: 0,
                     verticalAlign: 'unset',
-                    fontSize: '12px',
                   }}
-                  for="syzygy"
+                  htmlFor="syzygy"
                 >
                   {option}:{' '}
                 </label>
@@ -223,21 +297,29 @@ const DisplayEngineOption = ({
 
 const MobileEnginesList = (props) => {
   const {
-    userFullInfo,
-    orderedCores,
-    setOrderedCores,
+    plans,
+    serverInfo,
     savedAnalyzeInfo,
     setSavedAnalyzeInfo,
     setAnalyzingFenTabIndx,
     activePgnTab,
+    initiateFullAnalysis,
+    enginesOptionsList,
+    setEnginesOptionsList,
+    availableServers,
+    setAvailableServers,
+    setSubModal,
+    mType,
+    isGuestUser,
+    setLoginModal,
+    analysisLoader,
+    setAnalysisLoader,
+    analysisStopLoader,
+    freeAnalyzer,
+    connectToFree,
+    analyzingFenTabIndx,
   } = props;
   const enginesEndRef = useRef(null);
-  const [pingAliveIntervalId, setPingAliveIntervalId] = useState(null);
-  const [availableServersIntervalId, setAvailableServersIntervalId] = useState(
-    null
-  );
-  const [enginesOptionsList, setEnginesOptionsList] = useState({});
-  const [availableServers, setAvailableServers] = useState([]);
   const [isServerOrdering, setIsServerOrdering] = useState({});
   const [isExpanded, setIsExpanded] = useState(false);
   const [coreIndex, setCoreIndex] = useState({
@@ -248,79 +330,47 @@ const MobileEnginesList = (props) => {
     berserk: 0,
     koivisto: 0,
     rubichess: 0,
+    shashchess: 0,
+    komodo: 0,
   });
+  const [openStopAnalysisModal, setOpenAnalysisModal] = useState(false);
+  const [openCoinsModal, setOpenCoinsModal] = useState(false);
 
   useEffect(() => {
-    if (isExpanded) scrollToBottom();
+    if (isExpanded) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 300);
+    }
+
     _getEnginesOptions();
   }, [isExpanded]);
 
-  useEffect(() => {
-    const savedAnalyzeInfoFromSessionStorage = JSON.parse(
-      sessionStorage.getItem('latest_analyze_info')
-    );
-    _getAvailableServers();
-    _pingAliveServers();
-
-    if (servers && Object.keys(servers).length > 0) {
-      if (localStorage.getItem('ordered_cores')) {
-        setOrderedCores(JSON.parse(localStorage.getItem('ordered_cores')));
-      }
-    } else {
-      sessionStorage.removeItem('ordered_cores');
-    }
-
-    if (savedAnalyzeInfoFromSessionStorage) {
-      setSavedAnalyzeInfo(savedAnalyzeInfoFromSessionStorage);
-    }
-
-    return () => {
-      clearInterval(availableServersIntervalId);
-      clearInterval(pingAliveIntervalId);
-      setAvailableServersIntervalId(null);
-      setPingAliveIntervalId(null);
-    };
-  }, [userFullInfo]);
-
-  const { servers } = userFullInfo;
-
+  const servers = serverInfo ? serverInfo.servers : null;
   const scrollToBottom = () => {
     enginesEndRef.current.scrollIntoView({ behavior: 'smooth' });
   };
 
   const enginesStockfishLc0 = Object.keys(
-    getEnginesListFromAvailableServers(availableServers, userFullInfo)
+    getEnginesListFromAvailableServers(availableServers, plans, isGuestUser)
   ).filter(
     (serverName) => serverName === 'lc0' || serverName === 'stockfish10'
   );
 
   const restEngineList = Object.keys(
-    getEnginesListFromAvailableServers(availableServers, userFullInfo)
+    getEnginesListFromAvailableServers(availableServers, plans, isGuestUser)
   ).filter(
     (serverName) => serverName !== 'lc0' && serverName !== 'stockfish10'
   );
   const engineList = [
-    getEnginesListFromAvailableServers(availableServers, userFullInfo),
+    getEnginesListFromAvailableServers(availableServers, plans, isGuestUser),
   ];
-  const updateEnginesList = (availableServersList) => {
-    setAvailableServers(availableServersList);
-  };
-
-  const _getAvailableServers = () => {
-    const interval = setInterval(() => {
-      getAvailableServers()
-        .then((serversList) => {
-          updateEnginesList(serversList);
-        })
-        .catch((e) => {
-          console.error(e);
-        });
-    }, 3000);
-
-    setAvailableServersIntervalId(interval);
-  };
 
   const _getEnginesOptions = () => {
+    if (isGuestUser) {
+      setEnginesOptionsList(GUEST_USER_ENGINES_OPTION);
+      return;
+    }
     getEnginesOptions()
       .then((enginesOptionsList) => {
         setEnginesOptionsList(enginesOptionsList);
@@ -329,24 +379,52 @@ const MobileEnginesList = (props) => {
         console.error(e);
       });
   };
-
   const handelCoreChange = (indexValue, name) => {
-    const newObj = { ...coreIndex };
-    newObj[name] = indexValue;
-    setCoreIndex(newObj);
+    if (!analysisLoader) {
+      const newObj = { ...coreIndex };
+      newObj[name] = indexValue;
+      setCoreIndex(newObj);
+    }
   };
 
-  const handleOrderServer = (core, serverName) => {
+  const handleOrderServer = (item, serverName) => {
+    setAnalysisLoader(true);
+    if (item == undefined) {
+      delete isServerOrdering[serverName];
+      setIsServerOrdering(isServerOrdering);
+      console.log('ERROR ORDERING');
+      return;
+    }
+    const { cores } = item;
     setAnalyzingFenTabIndx(activePgnTab);
-    const orderedEngineCores = { ...orderedCores };
     const options = enginesOptionsList[serverName];
-    const coreIndexObj = { ...coreIndex };
-    coreIndexObj[serverName] = 0;
-    setCoreIndex(coreIndexObj);
+    if (servers && Object.keys(servers).length >= 1) {
+      const newObj = { ...coreIndex };
+      for (let [key, value] of Object.entries(newObj)) {
+        if (key != 'stockfish10' && key !== 'lcO' && value == 1) {
+          newObj[key] = 0;
+        }
+        if (
+          key == 'stockfish10' &&
+          (value == 4 ||
+            engineList[0][serverName].findIndex(
+              (items) => items.cores == 16
+            ) !== -1)
+        ) {
+          newObj[key] = 0;
+        }
+      }
+
+      setCoreIndex(newObj);
+    }
     isServerOrdering[serverName] = true;
     setIsServerOrdering(isServerOrdering);
-
-    orderServer(core, serverName, options)
+    if (isGuestUser) {
+      connectToFree();
+      setAnalysisLoader(false);
+      return;
+    }
+    orderServer(cores, serverName, options)
       .then((response) => {
         if (response.error) {
           delete isServerOrdering[serverName];
@@ -354,67 +432,60 @@ const MobileEnginesList = (props) => {
           console.log('ERROR ORDERING');
           return;
         }
+        _getEnginesOptions();
         delete isServerOrdering[serverName];
-        orderedEngineCores[serverName] = core;
         setIsServerOrdering(isServerOrdering);
-        setOrderedCores(orderedCores);
-        localStorage.setItem(
-          'ordered_cores',
-          JSON.stringify(orderedEngineCores)
-        );
+        setAnalysisLoader(false);
       })
       .catch((e) => {
         delete isServerOrdering[serverName];
         setIsServerOrdering(isServerOrdering);
+        setAnalysisLoader(false);
         console.log('IN CATCH', e);
       });
-  };
-
-  const _pingAliveServers = () => {
-    const interval = setInterval(() => {
-      // pingAlive(userFullInfo)
-      //   .then((response) => {
-      //     if (response.error) {
-      //       console.log('ERROR STOPPING');
-      //       return;
-      //     } else {
-      //       console.log('Pinged');
-      //     }
-      //   })
-      //   .catch((e) => {
-      //     console.error('IN CATCH', e);
-      //   });
-      if (servers && Object.keys(servers).length > 0) {
-        const engines = Object.keys(servers);
-
-        for (let i = 0; i < engines.length; i++) {
-          $.ajax({
-            url: `/api/ping_alive?engine=${engines[i]}`,
-            method: 'GET',
-            success() {
-              console.log('Pinged');
-            },
-          });
-        }
-      }
-    }, 5000);
-
-    setPingAliveIntervalId(interval);
   };
 
   const handleOptionChange = (optionsList) => {
     setEnginesOptionsList(optionsList);
   };
 
+  useEffect(() => {
+    if (isGuestUser) {
+      setAvailableServers(GUEST_USER_AVAILABLE_SERVERS);
+      return;
+    }
+    getAvailableServers()
+      .then((serversList) => {
+        setAvailableServers(serversList);
+      })
+      .catch((e) => {
+        captureException(e);
+        console.error('_getAvailableServers-err', e);
+      });
+  }, []);
+
   return (
     <>
-      <h6 className="mb-main-engines-title">Frequently used engines</h6>
       {enginesStockfishLc0.map((name, index) => {
+        if (
+          ENGINES_NAMES[name].includes('Stockfish') &&
+          isGuestUser &&
+          freeAnalyzer
+        )
+          return;
         return (
           <div
             className="main-container-wrapper"
             key={index}
-            style={{ display: servers[name] ? 'none' : '' }}
+            style={{
+              display:
+                servers &&
+                servers.constructor === Object &&
+                servers[name] &&
+                !initiateFullAnalysis
+                  ? 'none'
+                  : '',
+            }}
           >
             {engineList.map((engine, index) => {
               return (
@@ -427,6 +498,8 @@ const MobileEnginesList = (props) => {
                           engineNameStyleClassName={'engine-name-wrapper'}
                           enginesOptionsList={enginesOptionsList}
                           handleOptionChange={handleOptionChange}
+                          setLoginModal={setLoginModal}
+                          isGuestUser={isGuestUser}
                         />
                       ) : (
                         <h6 className="engine-name-wrapper">
@@ -435,11 +508,13 @@ const MobileEnginesList = (props) => {
                       )}
                     </div>
                     {name !== 'stockfish10' && (
-                      <div className="mb-analyze-info-item-wrapper">
+                      <div className="mb-analyze-info-item-wrapper lso">
                         <DisplayEngineOption
                           engineName={name}
                           enginesOptionsList={enginesOptionsList}
                           handleOptionChange={handleOptionChange}
+                          setLoginModal={setLoginModal}
+                          isGuestUser={isGuestUser}
                         />
                       </div>
                     )}
@@ -453,70 +528,109 @@ const MobileEnginesList = (props) => {
                           type={'cores'}
                           items={engine[name]}
                           engineName={name}
-                          userFullInfo={userFullInfo}
+                          plans={plans}
                           handelCoreChange={handelCoreChange}
+                          openCoinsModal={openCoinsModal}
+                          setOpenCoinsModal={setOpenCoinsModal}
+                          setLoginModal={setLoginModal}
+                          isGuestUser={isGuestUser}
                         />
                       </div>
                     )}
                   </div>
                   <div className="mb-engines-list-info-bottom mb-2">
-                    <div className="mb-analyze-info-item-wrapper">
-                      {
-                        (
-                          engineList[0][name][coreIndex[name]] ||
-                          engineList[0][name][0]
-                        ).price_per_minute
-                      }
-                      <span>&nbsp;coins/min</span>
-                    </div>
                     <div>
                       <DisplayEngineOption
                         engineName={name}
                         enginesOptionsList={enginesOptionsList}
                         handleOptionChange={handleOptionChange}
                         needOption="boolean"
+                        setLoginModal={setLoginModal}
+                        isGuestUser={isGuestUser}
                       />
                     </div>
                     <div className="analyze-button-wrapper">
                       {isServerOrdering[name] && loadingOrderedServer()}
-                      {servers &&
-                        !servers[name] &&
+                      {((servers &&
+                        (!servers[name] || initiateFullAnalysis) &&
                         !isServerOrdering[name] &&
                         showAnalyzeButton(
-                          userFullInfo,
-                          engineList[0][name][coreIndex[name]].cores,
+                          plans,
+                          engineList[0][name][coreIndex[name]],
                           (
                             engineList[0][name][coreIndex[name]] ||
                             engineList[0][name][0]
                           ).price_per_minute
-                        ) && (
+                        )) ||
+                        (isGuestUser &&
+                          ENGINES_NAMES[name].includes('Stockfish'))) &&
+                        (!initiateFullAnalysis ? (
                           <button
-                            className="analyze-button"
+                            className={
+                              !analysisLoader
+                                ? 'analyze-button'
+                                : 'analyze-button-loader'
+                            }
+                            disabled={analysisLoader || analysisStopLoader}
                             onClick={() => {
-                              handleOrderServer(
-                                engineList[0][name][coreIndex[name]].cores,
-                                name
-                              );
+                              if (!Boolean(sessionStorage.getItem('tabs')) && Object.keys(servers).length) {
+                                setSubModal('currently_analyzing')
+                              } else {
+                                sessionStorage.setItem('tabs', true)
+                                handleOrderServer(
+                                  engineList[0][name][coreIndex[name]],
+                                  name
+                                )
+                              }
                             }}
                           >
                             Analyze
                           </button>
-                        )}
-                      {servers &&
+                        ) : (
+                          <button
+                            id={`${ENGINES_NAMES[name].includes('Stockfish')
+                              ? 'analyzeStockfishBtn'
+                              : ''
+                              }`}
+                            className={
+                              !analysisLoader
+                                ? 'analyze-button'
+                                : 'analyze-button-loader'
+                            }
+                            disabled={analysisLoader || analysisStopLoader}
+                            onClick={() => {
+                              setOpenAnalysisModal(true);
+                            }}
+                          >
+                            Analyze
+                          </button>
+                        ))}
+                      {((servers &&
                         !servers[name] &&
                         !isServerOrdering[name] &&
                         !showAnalyzeButton(
-                          userFullInfo,
-                          engineList[0][name][coreIndex[name]].cores,
+                          plans,
+                          engineList[0][name][coreIndex[name]],
                           (
                             engineList[0][name][coreIndex[name]] ||
                             engineList[0][name][0]
                           ).price_per_minute
-                        ) && (
-                          <button className="analyze-button-disabled ">
-                            Analyze
-                          </button>
-                        )}
+                        )) ||
+                        (isGuestUser &&
+                          !ENGINES_NAMES[name].includes('Stockfish'))) && (
+                        <button
+                          className="analyze-button-disabled"
+                          onClick={() => {
+                            if (isGuestUser) {
+                              setLoginModal(true);
+                              return;
+                            }
+                            setOpenCoinsModal(true);
+                          }}
+                        >
+                          Analyze
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -541,21 +655,27 @@ const MobileEnginesList = (props) => {
               setIsExpanded(!isExpanded);
             }}
           >
-            <h6 className="pl-2">More Engines</h6>
-            <div>
-              {!isExpanded &&
-                restEngineList.map((serverName, index) => (
-                  <span key={index}>
-                    &nbsp;&nbsp;{ENGINES_NAMES[serverName]}&nbsp;&nbsp;
-                  </span>
-                ))}
-            </div>
+            More Engines
+            {!isExpanded &&
+              restEngineList.map((serverName, index) => (
+                <span key={index}>
+                  &nbsp;&nbsp;{ENGINES_NAMES[serverName]}&nbsp;&nbsp;
+                </span>
+              ))}
           </Accordion.Button>
           {restEngineList.map((name, index) => (
             <Accordion.Body
               className="accordion-body"
               key={index}
-              style={{ display: servers[name] ? 'none' : '' }}
+              style={{
+                display:
+                  servers &&
+                  servers.constructor === Object &&
+                  servers[name] &&
+                  !initiateFullAnalysis
+                    ? 'none'
+                    : '',
+              }}
             >
               <div className="main-container-wrapper">
                 <div>
@@ -564,12 +684,14 @@ const MobileEnginesList = (props) => {
                       <div key={index}>
                         <div className="mb-engines-list-info mb-2">
                           {enginesOptionsList[name] &&
-                          enginesOptionsList[name].engine ? (
+                            enginesOptionsList[name].engine ? (
                             <DisplayEngineOption
                               engineName={name}
                               engineNameStyleClassName={'engine-name-wrapper'}
                               enginesOptionsList={enginesOptionsList}
                               handleOptionChange={handleOptionChange}
+                              setLoginModal={setLoginModal}
+                              isGuestUser={isGuestUser}
                             />
                           ) : (
                             <div className="analyze-info-item">
@@ -585,75 +707,98 @@ const MobileEnginesList = (props) => {
                               type={'cores'}
                               items={engine[name]}
                               engineName={name}
-                              userFullInfo={userFullInfo}
+                              plans={plans}
                               handelCoreChange={handelCoreChange}
+                              setLoginModal={setLoginModal}
+                              isGuestUser={isGuestUser}
                             />
                           </div>
                         </div>
                         <div className="mb-engines-list-info-bottom mb-2">
-                          <div className="mb-analyze-info-item-wrapper">
-                            {
-                              (
-                                engineList[0][name][coreIndex[name]] ||
-                                engineList[0][name][0]
-                              ).price_per_minute
-                            }
-                            <span>&nbsp;coins/min</span>
-                          </div>
                           <div>
                             <DisplayEngineOption
                               engineName={name}
                               enginesOptionsList={enginesOptionsList}
                               handleOptionChange={handleOptionChange}
                               needOption="boolean"
+                              setLoginModal={setLoginModal}
+                              isGuestUser={isGuestUser}
                             />
                           </div>
                           <div className="analyze-button-wrapper">
                             {isServerOrdering[name] && loadingOrderedServer()}
                             {servers &&
-                              !servers[name] &&
+                              (!servers[name] || initiateFullAnalysis) &&
                               !isServerOrdering[name] &&
                               showAnalyzeButton(
-                                userFullInfo,
-                                engineList[0][name][coreIndex[name]].cores,
+                                plans,
+                                engineList[0][name][coreIndex[name]],
                                 (
                                   engineList[0][name][coreIndex[name]] ||
                                   engineList[0][name][0]
                                 ).price_per_minute
-                              ) && (
+                              ) &&
+                              (!initiateFullAnalysis ? (
                                 <button
-                                  id={`${
-                                    ENGINES_NAMES[name].includes('Stockfish')
-                                      ? 'analyzeStockfishBtn'
-                                      : ''
-                                  }`}
-                                  className="analyze-button"
+                                  id={`${ENGINES_NAMES[name].includes('Stockfish')
+                                    ? 'analyzeStockfishBtn'
+                                    : ''
+                                    }`}
+                                  className={
+                                    !analysisLoader
+                                      ? 'analyze-button'
+                                      : 'analyze-button-loader'
+                                  }
+                                  disabled={
+                                    analysisLoader || analysisStopLoader
+                                  }
                                   onClick={() => {
-                                    handleOrderServer(
-                                      engineList[0][name][coreIndex[name]]
-                                        .cores,
-                                      name
-                                    );
+                                    if (!Boolean(sessionStorage.getItem('tabs')) && Object.keys(servers).length) {
+                                      setSubModal('currently_analyzing')
+                                    } else {
+                                      sessionStorage.setItem('tabs', true)
+                                      handleOrderServer(
+                                        engineList[0][name][coreIndex[name]],
+                                        name
+                                      )
+                                    }
                                   }}
                                 >
                                   Analyze
                                 </button>
-                              )}
-                            {servers &&
+                              ) : (
+                                <button
+                                  className="analyze-button"
+                                  onClick={() => {
+                                    setOpenAnalysisModal(true);
+                                  }}
+                                >
+                                  Analyze
+                                </button>
+                              ))}
+                            {((servers &&
                               !servers[name] &&
                               !isServerOrdering[name] &&
                               !showAnalyzeButton(
-                                userFullInfo,
-                                engineList[0][name][coreIndex[name]].cores,
+                                plans,
+                                engineList[0][name][coreIndex[name]],
                                 (
                                   engineList[0][name][coreIndex[name]] ||
                                   engineList[0][name][0]
                                 ).price_per_minute
-                              ) && (
-                                <button className="analyze-button-disabled">
-                                  Analyze
-                                </button>
-                              )}
+                              )) ||
+                              isGuestUser) && (
+                              <button
+                                className="analyze-button-disabled"
+                                onClick={() => {
+                                  if (isGuestUser) {
+                                    setLoginModal(true);
+                                  }
+                                }}
+                              >
+                                Analyze
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -675,13 +820,25 @@ const MobileEnginesList = (props) => {
         </Accordion.Item>
         <div ref={enginesEndRef} />
       </Accordion>
-      <DecodeChess />
+      <CoinsCardModal
+        showModal={openCoinsModal}
+        setShowModal={setOpenCoinsModal}
+        isGuestUser={isGuestUser}
+      />
+      <StopAnalysisModal
+        isOpen={openStopAnalysisModal}
+        setIsOpen={setOpenAnalysisModal}
+        message={
+          'Please stop full-game analysis to analyse the current position.'
+        }
+      />
     </>
   );
 };
 
 export default connect(mapStateToProps, {
-  setOrderedCores,
   setSavedAnalyzeInfo,
   setAnalyzingFenTabIndx,
+  setSubModal,
+  connectToFree,
 })(React.memo(MobileEnginesList));

@@ -1,30 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { connect } from 'react-redux';
+import Table from 'react-bootstrap/Table';
 import { Modal, Button } from 'react-bootstrap';
-import {
-  generateFileName,
-  getPgnFileHeader,
-  settingHeader,
-} from '../../utils/chess-utils';
+import { generateFileName, settingHeader } from '../../utils/chess-utils';
 import {
   uploadFiles,
   createFolder,
   setActiveFile,
   setCurrentDirectory,
   setPgn,
+  setUploadFilterByPos,
 } from '../../actions/board';
-import { HiOutlineFolderAdd } from 'react-icons/hi';
 import { generateNewFolderName } from '../../../src/utils/pgn-viewer';
-import { updatePgnTags } from '../../utils/api';
 
 const mapStateToProps = (state) => {
   return {
     userUploads: state.board.userUploads,
     pgnStr: state.board.pgnStr,
-    userFullInfo: state.cloud.userFullInfo,
+    userInfo: state.cloud.userInfo,
     uploadLimitExceeded: state.board.uploadLimitExceeded,
+    uploadFilterByPos: state.board.uploadFilterByPos,
   };
 };
+
+const FOLDER_STYLE = require('../../../public/assets/images/pgn-viewer/folder-style.svg');
+const FOLDER_STYLE_ACTIVE = require('../../../public/assets/images/pgn-viewer/folder-style-active.svg');
 
 const SavePgnUploadModal = ({
   pgnStr,
@@ -32,7 +32,7 @@ const SavePgnUploadModal = ({
   isOpen,
   setIsOpen,
   uploadFiles,
-  userFullInfo,
+  userInfo,
   newFolderName,
   setNewFolderName,
   createFolder,
@@ -40,6 +40,11 @@ const SavePgnUploadModal = ({
   setCurrentDirectory,
   uploadLimitExceeded,
   setPgn,
+  uploadFilterByPos,
+  setUploadFilterByPos,
+  goToNextGame,
+  saveIndent,
+  changeRefIndx,
 }) => {
   const [disableBtn, setDisableBtn] = useState(true);
   const [fileName, setFileName] = useState(generateFileName());
@@ -66,7 +71,10 @@ const SavePgnUploadModal = ({
   }, [newFolderNameActive]);
 
   useEffect(() => {
-    if (userUploads.hasOwnProperty('noExistingFilesErrorMessage')) {
+    if (
+      userUploads &&
+      userUploads.hasOwnProperty('noExistingFilesErrorMessage')
+    ) {
       setNewFolder(true);
       const name = generateNewFolderName(userUploads, 'New Folder');
       setNewFolderName(name);
@@ -103,6 +111,7 @@ const SavePgnUploadModal = ({
     setDisableBtn(true);
     setNewFolder(false);
     setNewFolderNameActive(false);
+    setLoader(false);
     setSelectedFolder('');
     setFileName(generateFileName());
     setNewFolderName(generateNewFolderName(userUploads, 'New Folder'));
@@ -110,28 +119,21 @@ const SavePgnUploadModal = ({
 
   const savePgnHandler = () => {
     setLoader(true);
-    // pgnStr = settingHeader(pgnStr);
+    pgnStr = settingHeader(pgnStr);
     let finalName = fileName + '.pgn';
     let file = new File([pgnStr], finalName, {
       type: 'application/vnd.chess-pgn',
     });
 
-    const pgnHeader = getPgnFileHeader(pgnStr);
     let transfer = new DataTransfer();
     transfer.items.add(file);
     let fileList = transfer.files;
 
     if (newFolderName !== selectedFolder) {
       const path = '/' + selectedFolder + '/';
-      uploadFiles(path, fileList, userFullInfo).then((response) => {
-        const { data } = response.payload.uploadFilesResponse;
-        if (data.length) {
-          data.forEach((pgn) => {
-            updatePgnTags(pgn.id, pgn.name, pgnHeader, userFullInfo.token);
-          });
-        }
+      uploadFiles(path, fileList, userInfo).then((response) => {
         setCurrentDirectory(selectedFolder);
-        if (!uploadLimitExceeded) {
+        if (!uploadLimitExceeded && !goToNextGame) {
           setActiveFile(pgnStr, { key: path + finalName }, selectedFolder);
           setPgn(pgnStr);
         }
@@ -139,18 +141,12 @@ const SavePgnUploadModal = ({
         closeModalHandler();
       });
     } else {
-      createFolder('/', selectedFolder, userFullInfo).then(() => {
+      createFolder('/', selectedFolder, userInfo).then(() => {
         const path = '/' + selectedFolder + '/';
-        uploadFiles(path, fileList, userFullInfo).then((response) => {
-          const { data } = response.payload.uploadFilesResponse;
-          if (data.length) {
-            data.forEach((pgn) => {
-              updatePgnTags(pgn.id, pgn.name, pgnHeader, userFullInfo.token);
-            });
-          }
+        uploadFiles(path, fileList, userInfo).then((response) => {
           const path = '/' + selectedFolder + '/';
           setCurrentDirectory(selectedFolder);
-          if (!uploadLimitExceeded) {
+          if (!uploadLimitExceeded && !goToNextGame) {
             setActiveFile(pgnStr, { key: path + finalName }, selectedFolder);
             setPgn(pgnStr);
           }
@@ -158,6 +154,9 @@ const SavePgnUploadModal = ({
           closeModalHandler();
         });
       });
+    }
+    if (goToNextGame) {
+      changeRefIndx(saveIndent);
     }
   };
 
@@ -219,97 +218,122 @@ const SavePgnUploadModal = ({
           />
         </div>
         <div className="mb-3 mt-4">
-          <h6 className="save-info-title">Save in:</h6>
-          <div className="folders-container-upload">
-            {userUploads &&
-            !userUploads.hasOwnProperty('noExistingFilesErrorMessage') ? (
-              Object.keys(userUploads).map((folder, index) => {
-                return (
-                  <button
-                    key={folder + Math.random() * index}
-                    className="folder-btn directory"
+          <div className="d-flex flex-row justify-content-between">
+            <h6 className="save-info-title">Save in:</h6>
+            <div>
+              <select
+                value={uploadFilterByPos ? 'position' : 'all'}
+                className="uploads-filter-opt"
+                onChange={(e) => {
+                  setUploadFilterByPos(e.target.value);
+                }}
+              >
+                <option value="all">All Files</option>
+                <option value="position">By Position</option>
+              </select>
+            </div>
+          </div>
+          <Table className="folders-container" hover>
+            <tbody className="container-folder-body">
+              {userUploads &&
+              !userUploads.hasOwnProperty('noExistingFilesErrorMessage') ? (
+                Object.keys(userUploads).map((folder, index) => {
+                  return (
+                    <tr
+                      key={folder + Math.random() * index}
+                      className="folder-btn directory"
+                      onClick={() => {
+                        setSelectedFolder(folder);
+                      }}
+                    >
+                      <td className="folder-btn">
+                        <div id="folderContainer">
+                          <span>{index + 1}.</span>
+                          <img
+                            src={
+                              selectedFolder === folder
+                                ? FOLDER_STYLE_ACTIVE
+                                : FOLDER_STYLE
+                            }
+                            width={25}
+                            alt=""
+                          />
+                          <span>{folder}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <></>
+              )}
+              <tr className="folder-btn directory">
+                {!newFolder ? (
+                  <td
+                    className="folder-btn"
                     onClick={() => {
-                      setSelectedFolder(folder);
+                      setNewFolder(true);
+                      setNewFolderNameActive(true);
+                      setSelectedFolder(newFolderName);
                     }}
                   >
-                    <span className="directory d-flex flex-column">
+                    <div id="folderContainer" style={{ margin: '0 auto' }}>
+                      <span className="add-new-folder-icon">
+                        Create new folder
+                      </span>
+                    </div>
+                  </td>
+                ) : (
+                  <td
+                    className="folder-btn"
+                    onClick={() => {
+                      setSelectedFolder(newFolderName);
+                    }}
+                  >
+                    <div id="folderContainer">
+                      <span>{Object.keys(userUploads).length + 1}.</span>
                       <img
-                        className={`directory ${
-                          selectedFolder === folder
-                            ? 'active-folder-select'
-                            : ''
-                        }`}
-                        src={require('../../../public/assets/images/pgn-viewer/folder-style.svg')}
-                        width={72}
-                        height={72}
+                        src={
+                          selectedFolder === newFolderName
+                            ? FOLDER_STYLE_ACTIVE
+                            : FOLDER_STYLE
+                        }
+                        width={25}
                         alt=""
                       />
-                      <span className="directory">{folder}</span>
-                    </span>
-                  </button>
-                );
-              })
-            ) : (
-              <></>
-            )}
-            {!newFolder ? (
-              <HiOutlineFolderAdd
-                className="add-new-folder-icon"
-                onClick={() => {
-                  setNewFolder(true);
-                  setNewFolderNameActive(true);
-                  setSelectedFolder(newFolderName);
-                }}
-              />
-            ) : (
-              <>
-                <br />
-                <button className="folder-btn directory">
-                  <span className="directory d-flex flex-column">
-                    <img
-                      className={`directory ${
-                        selectedFolder === newFolderName
-                          ? 'active-folder-select'
-                          : ''
-                      }`}
-                      src={require('../../../public/assets/images/pgn-viewer/folder-style.svg')}
-                      width={72}
-                      height={72}
-                      alt=""
-                      onClick={() => {
-                        setSelectedFolder(newFolderName);
-                      }}
-                    />
-                    <span className="directory">
-                      {newFolderNameActive ? (
-                        <input
-                          active
-                          value={newFolderName}
-                          ref={refInput}
-                          className="new-folder-inp"
-                          onChange={(e) => {
-                            setNewFolderName(e.target.value);
-                            setSelectedFolder(e.target.value);
-                          }}
-                          onKeyDown={(e) => {
-                            e.key === 'Enter' && saveFolderHandler();
-                          }}
-                        />
-                      ) : (
-                        <span
-                          onClick={(e) => {
-                            changeNameHandler(e);
-                          }}
-                        >
-                          {newFolderName}
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                </button>
-              </>
-            )}
-          </div>
+                      <span className="directory">
+                        {newFolderNameActive ? (
+                          <input
+                            active
+                            value={newFolderName}
+                            ref={refInput}
+                            className="new-folder-inp"
+                            onChange={(e) => {
+                              setNewFolderName(e.target.value);
+                              setSelectedFolder(e.target.value);
+                            }}
+                            onKeyDown={(e) => {
+                              e.key === 'Enter' && saveFolderHandler();
+                            }}
+                          />
+                        ) : (
+                          <span
+                            onClick={(e) => {
+                              changeNameHandler(e);
+                            }}
+                            title="Double click to change name"
+                          >
+                            {newFolderName}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            </tbody>
+          </Table>
+          <div className="folders-container-upload"></div>
         </div>
         <div className="d-flex flex-row justify-content-between">
           <Button
@@ -342,4 +366,5 @@ export default connect(mapStateToProps, {
   setActiveFile,
   setCurrentDirectory,
   setPgn,
+  setUploadFilterByPos,
 })(SavePgnUploadModal);

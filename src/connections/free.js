@@ -2,7 +2,7 @@ import io from 'socket.io-client';
 import { CLOUD_URL } from '../constants/cloud-params';
 
 export default function connectToFree(token, onConnect, onGetAnalyze) {
-  console.log('PARAMS: ', token, onConnect, onGetAnalyze);
+  // console.log('PARAMS: ', token, onConnect, onGetAnalyze);
   const socket = io(CLOUD_URL, {
     transports: ['websocket', 'flashsocket'],
     transportOptions: {

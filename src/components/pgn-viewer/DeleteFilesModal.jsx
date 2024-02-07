@@ -8,7 +8,7 @@ const DeleteFilesModal = ({
   setSelectedFiles,
   deleteFiles,
   isFile,
-  userFullInfo,
+  userInfo,
   setLoader,
 }) => {
   const closeModalHandler = () => {
@@ -20,12 +20,12 @@ const DeleteFilesModal = ({
     setIsOpen(false);
     if (!isFile) {
       setLoader('folderLoader');
-      deleteFiles([], selectedFiles, userFullInfo).then(() => {
+      deleteFiles([], selectedFiles, userInfo).then(() => {
         setLoader('');
       });
     } else {
       setLoader('fileLoader');
-      deleteFiles(selectedFiles, [], userFullInfo).then(() => {
+      deleteFiles(selectedFiles, [], userInfo).then(() => {
         setLoader('');
       });
     }

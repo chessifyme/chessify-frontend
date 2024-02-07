@@ -6,23 +6,28 @@ const ENGINES = [
   'berserk',
   'koivisto',
   'rubichess',
+  'shashchess',
+  'komodo',
 ];
 
 export const ENGINES_NAMES = {
   asmfish: 'AsmFish',
-  stockfish10: 'Stockfish 15.1',
+  stockfish10: 'Stockfish 16',
   sugar: 'Sugar AI',
-  lc0: 'LCZero 0.29',
-  berserk: 'Berserk 11.1',
+  lc0: 'LCZero 0.31-dev',
+  berserk: 'Berserk 12',
   koivisto: 'Koivisto',
   rubichess: 'RubiChess',
+  shashchess: 'ShashChess',
+  komodo: 'Komodo D3.2',
 };
 
 export function getEnginesListFromAvailableServers(
   availableServers,
-  userFullInfo
+  plans,
+  isGuestUser
 ) {
-  const subscription = userFullInfo.subscription ? userFullInfo.subscription : {};
+  const subscription = plans && plans.subscription ? plans.subscription : {};
 
   const orderedServers = {};
   const result = {};
@@ -31,8 +36,10 @@ export function getEnginesListFromAvailableServers(
     berserk: [8, 16, 32, 128],
     koivisto: [8, 16, 32, 128],
     rubichess: [8, 16, 32, 128],
+    shashchess: [8, 16, 32, 128],
+    komodo: [129],
     sugar: [8, 16, 32, 128],
-    stockfish10: [8, 16, 32, 128, 160, 352, 512],
+    stockfish10: [8, 16, 32, 128, 160, 352, 768, 512],
     lc0: [100],
   };
   const orderedEngines = orderedServers && Object.keys(orderedServers);
@@ -43,26 +50,28 @@ export function getEnginesListFromAvailableServers(
     } else {
       const res = [];
       const index = {};
-
-      availableServers.forEach((s) => {
-        if (servers[engine].indexOf(s.cores) !== -1) {
-          if (!index[s.cores]) {
-            index[s.cores] = true;
-            res.push(s);
+      if (availableServers && availableServers.length) {
+        availableServers.forEach((s) => {
+          if (servers[engine].indexOf(s.cores) !== -1) {
+            if (!index[s.cores]) {
+              index[s.cores] = true;
+              res.push(s);
+            }
           }
-        }
-      });
+        });
+      }
 
       res.sort((a, b) => {
         return a.cores - b.cores;
       });
 
       if (res.length) {
-        if (subscription && userFullInfo.balance <= 0) {
+        if (subscription && plans && plans.balance <= 0) {
           res.push();
         } else {
           res.push(res.shift());
         }
+        if (isGuestUser) res.reverse();
         result[engine] = res;
       }
     }
@@ -70,8 +79,15 @@ export function getEnginesListFromAvailableServers(
   return result;
 }
 
-export function coreToKNode(engineIndex, cores, selectedEngine) {
+export function coreToKNode(engineIndex, item, selectedEngine) {
+  if (item == undefined) {
+    console.log('coreToKNode');
+    return null;
+  }
+
   const engine = engineIndex !== null ? ENGINES[engineIndex] : selectedEngine;
+  const { cores } = item;
+
   const table = {
     sugar: {
       8: {
@@ -105,8 +121,8 @@ export function coreToKNode(engineIndex, cores, selectedEngine) {
         caption: '25-100 MN/s',
       },
       128: {
-        average: '110,000',
-        caption: '110 MN/s',
+        average: '130,000',
+        caption: '130 MN/s',
       },
       160: {
         average: '300,000',
@@ -119,6 +135,10 @@ export function coreToKNode(engineIndex, cores, selectedEngine) {
       512: {
         average: '1,000,000',
         caption: '1 BN/s',
+      },
+      768: {
+        average: '1,500,000',
+        caption: '1.5 BN/s',
       },
       1024: {
         average: '2,000,000',
@@ -197,6 +217,30 @@ export function coreToKNode(engineIndex, cores, selectedEngine) {
         caption: '130 MN/s',
       },
     },
+    shashchess: {
+      8: {
+        average: '1,000',
+        caption: '1 MN/s',
+      },
+      16: {
+        average: '10,000',
+        caption: '10 MN/s',
+      },
+      32: {
+        average: '100,000',
+        caption: '25-100 MN/s',
+      },
+      128: {
+        average: '130,000',
+        caption: '130 MN/s',
+      },
+    },
+    komodo: {
+      129: {
+        average: '90,000',
+        caption: '90 MN/s',
+      },
+    },
     lc0: {
       100: {
         average: '100',
@@ -212,19 +256,23 @@ export function coreToKNode(engineIndex, cores, selectedEngine) {
     };
   }
 
-  return table[engine][cores];
+  return table[engine][cores].caption;
 }
 
-export function disabledEngineCore(userFullInfo, core) {
-  const { balance, subscription } = userFullInfo;
+export function disabledEngineCore(plans, item) {
+  const { balance, subscription } = plans;
+  const { cores } = item;
 
-  if (core === 8) {
+  if (item == undefined) {
+    return true;
+  }
+  if (cores === 8) {
     if (!subscription) {
       return true;
     }
   }
 
-  if (core === 16) {
+  if (cores === 16) {
     if (!subscription) {
       return false;
     }
@@ -240,7 +288,7 @@ export function disabledEngineCore(userFullInfo, core) {
     }
   }
 
-  if (core === 32) {
+  if (cores === 32) {
     if (
       !subscription ||
       parseInt(subscription.product_id) === 15 ||
@@ -253,33 +301,114 @@ export function disabledEngineCore(userFullInfo, core) {
       return true;
     }
   }
-  if (core > 32) {
+  if (cores > 32) {
     if (balance > 0) {
       return true;
     }
-    if (core === 100) {
-      if (subscription && (parseInt(subscription.product_id) === 22 || parseInt(subscription.product_id) === 23 || parseInt(subscription.product_id) === 25)) {
+    if (cores === 100) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 22 ||
+          parseInt(subscription.product_id) === 23 ||
+          parseInt(subscription.product_id) === 25 ||
+          parseInt(subscription.product_id) === 36 ||
+          parseInt(subscription.product_id) === 37 ||
+          parseInt(subscription.product_id) === 38 ||
+          parseInt(subscription.product_id) === 41 ||
+          parseInt(subscription.product_id) === 42)
+      ) {
         if (new Date(subscription.valid_till) >= Date.now()) {
           return true;
         } else {
           return false;
         }
       } else {
-        return false
+        return false;
+      }
+    }
+    if (cores === 128) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 34 ||
+          parseInt(subscription.product_id) === 36)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+    if (cores === 160) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 33 ||
+          parseInt(subscription.product_id) === 37)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+    if (cores === 352) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 35 ||
+          parseInt(subscription.product_id) === 38)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+    if (cores === 512) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 39 ||
+          parseInt(subscription.product_id) === 41)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+    if (cores === 768) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 40 ||
+          parseInt(subscription.product_id) === 42)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
       }
     }
     return false;
   }
 }
 
-export function showAnalyzeButton(user, core, pricePerMinute) {
-  const { subscription, balance } = user;
+export function showAnalyzeButton(user, item, pricePerMinute) {
 
-  if (core === 8) {
+  if (item == undefined) {
     return true;
   }
 
-  if (core === 16) {
+  const { subscription, balance } = user;
+  const { cores } = item;
+
+  if (cores === 8) {
+    return true;
+  }
+
+  if (cores === 16) {
     if (subscription) {
       if (new Date(subscription.valid_till) >= Date.now()) {
         return true;
@@ -291,7 +420,7 @@ export function showAnalyzeButton(user, core, pricePerMinute) {
     }
   }
 
-  if (core === 32) {
+  if (cores === 32) {
     if (
       !subscription ||
       parseInt(subscription.product_id) === 15 ||
@@ -309,27 +438,102 @@ export function showAnalyzeButton(user, core, pricePerMinute) {
     }
   }
 
-  if (core > 32) {
+  if (cores > 32) {
     if (balance > 0) {
       return true;
     }
-    if (core === 100) {
-      if (subscription && (parseInt(subscription.product_id) === 22 || parseInt(subscription.product_id) === 23 || parseInt(subscription.product_id) === 25)) {
+    if (cores === 100) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 22 ||
+          parseInt(subscription.product_id) === 23 ||
+          parseInt(subscription.product_id) === 25 ||
+          parseInt(subscription.product_id) === 36 ||
+          parseInt(subscription.product_id) === 37 ||
+          parseInt(subscription.product_id) === 38 ||
+          parseInt(subscription.product_id) === 41 ||
+          parseInt(subscription.product_id) === 42)
+      ) {
         if (new Date(subscription.valid_till) >= Date.now()) {
           return true;
         } else {
           return false;
         }
       } else {
-        return false
+        return false;
+      }
+    }
+    if (cores === 128) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 34 ||
+          parseInt(subscription.product_id) === 36)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+    if (cores === 160) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 33 ||
+          parseInt(subscription.product_id) === 37)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+    if (cores === 352) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 35 ||
+          parseInt(subscription.product_id) === 38)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+    if (cores === 512) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 39 ||
+          parseInt(subscription.product_id) === 41)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+    if (cores === 768) {
+      if (
+        subscription &&
+        (parseInt(subscription.product_id) === 40 ||
+          parseInt(subscription.product_id) === 42)
+      ) {
+        if (new Date(subscription.valid_till) >= Date.now()) {
+          return true;
+        } else {
+          return false;
+        }
       }
     }
     return false;
   }
 }
 
-export function getOrderedSeversInfoFromUserInfo(userFullInfo) {
-  const servers = userFullInfo.servers || {};
+export function getOrderedSeversInfoFromUserInfo(serversState) {
+  const servers = serversState || {};
 
   const result = [];
 

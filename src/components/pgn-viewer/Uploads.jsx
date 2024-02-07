@@ -14,9 +14,10 @@ const mapStateToProps = (state) => {
     userUploads: state.board.userUploads,
     currentDirectory: state.board.currentDirectory,
     loader: state.board.loader,
-    userFullInfo: state.cloud.userFullInfo,
+    userInfo: state.cloud.userInfo,
     tourStepNumber: state.board.tourStepNumber,
     tourType: state.board.tourType,
+    isGuestUser: state.cloud.isGuestUser,
   };
 };
 
@@ -26,15 +27,20 @@ const Uploads = ({
   setUserUploads,
   currentDirectory,
   loader,
-  userFullInfo,
-  setActiveTab,
+  userInfo,
   setLoader,
   tourStepNumber,
   tourType,
   setTourNextStep,
   setCreateFolderModal,
+  sortByName,
+  setSortByName,
+  isGuestUser,
+  setLoginModal,
 }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [editFolder, setEditFolder] = useState(false);
 
   const outsideClickHandler = (event) => {
     if (
@@ -76,16 +82,14 @@ const Uploads = ({
       isMounted
     ) {
       setLoader('initalLoad');
-      setUserUploads('/', userFullInfo);
+      setUserUploads('/', userInfo);
     }
     return () => {
       isMounted = false;
     };
   }, [userUploads]);
 
-  useEffect(() => {
-    console.log('DIRECTORY CHANGED');
-  }, [currentDirectory]);
+  useEffect(() => {}, [currentDirectory]);
 
   useEffect(() => {
     if (
@@ -100,7 +104,7 @@ const Uploads = ({
 
   return (
     <>
-      {loader === 'initalLoad' ? (
+      {loader === 'initalLoad' && !isGuestUser ? (
         <div className="isLoading isLoading-folder isLoading-uploads">
           <div>
             <div className="lds-ellipsis">
@@ -116,29 +120,37 @@ const Uploads = ({
           <UploadsNav
             selectedFiles={selectedFiles}
             setSelectedFiles={setSelectedFiles}
-            userFullInfo={userFullInfo}
+            userInfo={userInfo}
             setCreateFolderModal={setCreateFolderModal}
+            deleteModal={deleteModal}
+            setDeleteModal={setDeleteModal}
+            editFolder={editFolder}
+            setEditFolder={setEditFolder}
+            setSortByName={setSortByName}
+            setLoginModal={setLoginModal}
           />
-          {userUploads &&
-          userUploads.hasOwnProperty('noExistingFilesErrorMessage') ? (
-            <div className="no-uploads">
-              {userUploads.noExistingFilesErrorMessage}
-            </div>
+          {(userUploads &&
+            userUploads.hasOwnProperty('noExistingFilesErrorMessage')) ||
+          isGuestUser ? (
+            <div className="no-uploads">No uploads yet</div>
           ) : currentDirectory === '/' ? (
             <UploadedDirs
               userUploadedFiles={userUploads}
               selectedFiles={selectedFiles}
               setSelectedFiles={setSelectedFiles}
+              setDeleteModal={setDeleteModal}
+              setEditFolder={setEditFolder}
+              sortByName={sortByName}
             />
           ) : (
             <UploadedFiles
               userUploadedFiles={userUploads}
-              userFullInfo={userFullInfo}
-              setActiveTab={setActiveTab}
+              userInfo={userInfo}
               uploadProgress={uploadProgress}
               tourType={tourType}
               tourStepNumber={tourStepNumber}
               setTourNextStep={setTourNextStep}
+              sortByName={sortByName}
             />
           )}
         </>

@@ -2,19 +2,30 @@ import React, { useState, useEffect } from 'react';
 import Tour from 'reactour';
 import { IoIosCheckmarkCircleOutline } from 'react-icons/io';
 import { INITIAL_FEN } from '../../constants/board-params';
-import { addOnboadingData } from '../../utils/api';
+import {
+  addOnboadingData,
+  stopServer,
+  getUserNotifiactionData,
+} from '../../utils/api';
 import { connect } from 'react-redux';
 import {
   setTourType,
   setTourNextStep,
   setFen,
   setMatchedPositionName,
+  deleteFiles,
+  removePgnFromArr,
 } from '../../actions/board';
+import { useNavigate } from 'react-router-dom';
 
 const mapStateToProps = (state) => {
   return {
-    userFullInfo: state.cloud.userFullInfo,
+    notification: state.cloud.notification,
     tourStepNumber: state.board.tourStepNumber,
+    userUploads: state.board.userUploads,
+    allPgnArr: state.board.allPgnArr,
+    userInfo: state.cloud.userInfo,
+    serverInfo: state.cloud.serverInfo,
   };
 };
 
@@ -31,12 +42,41 @@ const Onboarding = ({
   setTourNextStep,
   setFen,
   setMatchedPositionName,
-  setActiveTab,
-  userFullInfo,
+  deleteFiles,
+  userUploads,
+  allPgnArr,
+  removePgnFromArr,
+  userInfo,
+  serverInfo,
 }) => {
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [current, setCurrent] = useState(0);
   const [descrChoice, setDescrChoice] = useState(null);
+  const navigate = useNavigate();
+
+  const analysisHandler = () => {
+    navigate({ pathname: '/analysis' });
+    setTourType('analyze');
+    setIsTourOpen(false);
+    if (allPgnArr.length === 2) {
+      removePgnFromArr(allPgnArr.length - 1);
+    }
+    if (!userUploads.hasOwnProperty('noExistingFilesErrorMessage')) {
+      deleteFiles([], Object.keys(userUploads), userInfo).then(() => {});
+    }
+    if (serverInfo && Object.keys(serverInfo.servers).length === 1) {
+      stopServer(Object.keys(serverInfo.servers)[0])
+        .then((response) => {
+          if (response.error) {
+            console.log('ERROR STOPPING');
+            return;
+          }
+        })
+        .catch((e) => {
+          console.error('IN CATCH', e);
+        });
+    }
+  };
 
   const steps = [
     {
@@ -117,14 +157,7 @@ const Onboarding = ({
             <p className="step-desc">What would you like to do now?</p>
           </div>
           <div>
-            <button
-              className="onboarding-btn"
-              onClick={() => {
-                setActiveTab(0);
-                setTourType('analyze');
-                setIsTourOpen(false);
-              }}
-            >
+            <button className="onboarding-btn" onClick={analysisHandler}>
               Analyze my game
             </button>
           </div>
@@ -132,7 +165,7 @@ const Onboarding = ({
             <button
               className="onboarding-btn"
               onClick={() => {
-                setActiveTab(0);
+                navigate({ pathname: '/analysis' });
                 setTourType('study');
                 setIsTourOpen(false);
                 setFen(INITIAL_FEN);
@@ -146,7 +179,7 @@ const Onboarding = ({
             <button
               className="onboarding-btn onboarding-btn-last"
               onClick={() => {
-                setActiveTab(0);
+                navigate({ pathname: '/analysis' });
                 setTourType('prepare');
                 setIsTourOpen(false);
                 setFen(INITIAL_FEN);
@@ -245,9 +278,15 @@ const Onboarding = ({
   };
 
   useEffect(() => {
-    if (userFullInfo && userFullInfo.show_onboarding) {
-      setIsTourOpen(true);
-    }
+    getUserNotifiactionData()
+      .then((notification) => {
+        if (notification) {
+          setIsTourOpen(notification.show_onboarding);
+        }
+      })
+      .catch((e) => {
+        console.error('USER onBoardingACOOUNT ERROR======>>>>', e);
+      });
   }, []);
 
   useEffect(() => {
@@ -277,6 +316,7 @@ const Onboarding = ({
         goToStep={current}
         disableFocusLock={true}
         closeWithMask={false}
+        startAt={current}
       />
     </>
   );
@@ -289,4 +329,6 @@ export default connect(mapStateToProps, {
   setMatchedPositionName,
   setTourType,
   setTourNextStep,
+  deleteFiles,
+  removePgnFromArr,
 })(Onboarding);

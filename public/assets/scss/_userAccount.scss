@@ -16,6 +16,41 @@ html {
   background-color: var(--background-color-main);
 }
 
+.back_to_dashboard{
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 1px solid #f5f5f3;
+  background: #207850;
+  text-align: center;
+  svg{
+    color: var(--text-color);
+    font-size: 20px;
+    color: #fff;
+  }
+
+  @media only screen and (max-width: 600px) {
+    display: none;
+  }
+}
+.back_to_dashboard_mob{
+  display: none;
+  @media only screen and (max-width: 600px) {
+    display: block;
+    margin:15px auto;
+    padding: 0 17px;
+    height: 32px;
+    width: 92%;
+    background: #207850;
+    border-radius: 8px;
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 18px;
+    font-family: "Inter",sans-serif;
+  }
+}
 .user-account {
   display: flex;
   align-items: flex-start;

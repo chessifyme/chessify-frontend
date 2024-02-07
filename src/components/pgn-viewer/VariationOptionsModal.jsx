@@ -34,9 +34,11 @@ const VariationOptionsModal = ({
 
   const insertHandler = (activeMove, promoteVariation, deleteVariation) => {
     promoteVariation(activeMove);
-    const demotedVarFirstMove =
-      activeMove.ravs[activeMove.ravs.length - 1].moves[0];
-    deleteVariation(demotedVarFirstMove);
+    if (activeMove.ravs && activeMove.ravs.length) {
+      const demotedVarFirstMove =
+        activeMove.ravs[activeMove.ravs.length - 1].moves[0];
+      deleteVariation(demotedVarFirstMove);
+    }
     setVariationOpt(false);
   };
 

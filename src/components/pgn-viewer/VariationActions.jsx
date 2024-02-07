@@ -16,14 +16,38 @@ const mapStateToProps = (state) => {
 class VariationActions extends React.Component {
   componentDidMount() {
     document.addEventListener('keydown', (event) => this.handleKeyDown(event));
+    document
+      .querySelector('.main-board')
+      .addEventListener('wheel', (event) => this.handleWheel(event), false);
   }
 
   componentWillUnmount() {
-    window.removeEventListener('keydown', (event) => this.handleKeyDown(event));
+    document.removeEventListener('keydown', (event) =>
+      this.handleKeyDown(event)
+    );
+    document
+      .querySelector('.main-board')
+      .removeEventListener('wheel', (event) => this.handleWheel(event), false);
   }
-
+  handleWheel = (event) => {
+    event.preventDefault();
+    var e_delta = event.deltaY || -event.wheelDelta || event.detail;
+    var delta = (e_delta && (e_delta >> 10 || 1)) || 0;
+    if (delta > 0) {
+      this.goToPrevMove();
+    } else if (delta < 0) {
+      this.goToNextMove();
+    }
+  };
   handleKeyDown(event) {
-    if (this.props.activeVarOpt) return;
+    if (
+      this.props.activeVarOpt ||
+      this.props.activeTab === 5 ||
+      this.props.isCommentField ||
+      (this.props.editComment && this.props.editComment.id)
+    ) {
+      return;
+    }
     switch (event.key) {
       case ARROW_LEFT: {
         this.goToPrevMove();
@@ -40,16 +64,15 @@ class VariationActions extends React.Component {
   }
 
   goToPrevMove() {
-    const { activeMove, setActiveMove } = this.props;
-
-    if (!activeMove) return;
+    const { activeMove, setActiveMove, activeTab } = this.props;
+    if (!activeMove || activeTab === 3) return;
 
     setActiveMove(activeMove.prev_move);
   }
 
   goToNextMove() {
-    const { activeMove, pgn, setActiveMove } = this.props;
-    if (!pgn.moves) return;
+    const { activeMove, pgn, setActiveMove, activeTab } = this.props;
+    if (!pgn.moves || activeTab === 3) return;
 
     if (!activeMove) {
       setActiveMove(pgn.moves[0]);
@@ -57,7 +80,7 @@ class VariationActions extends React.Component {
     }
 
     const row = getRowContainingMove(pgn.moves, activeMove);
-
+    if (!row) return;
     const curMoveIndexInRow = row.findIndex(
       (m) => m.move_id === activeMove.move_id
     );

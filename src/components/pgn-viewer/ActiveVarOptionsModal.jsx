@@ -3,34 +3,7 @@ import { connect } from 'react-redux';
 import { Modal, Button } from 'react-bootstrap';
 import { setActiveMove } from '../../actions/board';
 import { formatMoveNumber } from '../../utils/pgn-viewer';
-
-const useKeyPress = (targetKey) => {
-  const [keyPressed, setKeyPressed] = useState(false);
-
-  useEffect(() => {
-    const downHandler = ({ key }) => {
-      if (key === targetKey) {
-        setKeyPressed(true);
-      }
-    };
-
-    const upHandler = ({ key }) => {
-      if (key === targetKey) {
-        setKeyPressed(false);
-      }
-    };
-
-    window.addEventListener('keydown', downHandler);
-    window.addEventListener('keyup', upHandler);
-
-    return () => {
-      window.removeEventListener('keydown', downHandler);
-      window.removeEventListener('keyup', upHandler);
-    };
-  }, [targetKey]);
-
-  return keyPressed;
-};
+import useKeyPress from './KeyPress';
 
 const ActiveVarOptionsModal = ({
   nextMove,
@@ -40,11 +13,11 @@ const ActiveVarOptionsModal = ({
 }) => {
   const [selectedMove, setSelectedMove] = useState(-1);
   const [firstRightKey, setFirstRightKey] = useState(false);
-  const arrowUpPressed = useKeyPress('ArrowUp');
-  const arrowDownPressed = useKeyPress('ArrowDown');
-  const arrowRightPressed = useKeyPress('ArrowRight');
-  const arrowLeftPressed = useKeyPress('ArrowLeft');
-  const enterPressed = useKeyPress('Enter');
+  const arrowUpPressed = useKeyPress(38);
+  const arrowDownPressed = useKeyPress(40);
+  const arrowRightPressed = useKeyPress(39);
+  const arrowLeftPressed = useKeyPress(37);
+  const enterPressed = useKeyPress(13);
 
   useEffect(() => {
     if (arrowUpPressed && isOpen) {

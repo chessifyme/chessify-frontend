@@ -6,34 +6,40 @@ import { setMatchedPositionName } from '../../actions/board';
 import boardEditordata from '../../utils/board-editor-data';
 
 const mapStateToProps = (state) => {
-    return {
-        fen: state.board.fen,
-        matchedPositionName: state.board.matchedPositionName,
-    };
+  return {
+    fen: state.board.fen,
+    matchedPositionName: state.board.matchedPositionName,
+  };
 };
 
 const PopularPositionMatched = ({
-    fen,
-    matchedPositionName,
-    setMatchedPositionName,
+  fen,
+  matchedPositionName,
+  setMatchedPositionName,
 }) => {
+  useEffect(() => {
+    const identifier = setTimeout(() => {
+      const matchedResult = matchFenWithPopularPosition(
+        fen,
+        boardEditordata.positions
+      );
 
-    useEffect(() => {
-        const matchedResult = matchFenWithPopularPosition(fen, boardEditordata.positions);
+      if (matchedResult) {
+        setMatchedPositionName(matchedResult.name);
+      }
+    }, 100);
+    return () => {
+      clearTimeout(identifier);
+    };
+  }, [fen]);
 
-        if (matchedResult) {
-            setMatchedPositionName(matchedResult.name)
-        }
-
-    }, [fen]);
-
-    return (
-        <div className='matched-popular-position'>
-            {
-                matchedPositionName && <span>{matchedPositionName}</span>
-            }
-        </div>
-    );
+  return (
+    <div className="matched-popular-position">
+      {matchedPositionName && <span>{matchedPositionName}</span>}
+    </div>
+  );
 };
 
-export default connect(mapStateToProps, { setMatchedPositionName })(PopularPositionMatched);
+export default connect(mapStateToProps, { setMatchedPositionName })(
+  PopularPositionMatched
+);

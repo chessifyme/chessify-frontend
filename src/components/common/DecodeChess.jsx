@@ -3,12 +3,9 @@ import { connect } from 'react-redux';
 import Accordion from 'react-bootstrap/Accordion';
 import { addPgnToArr, setFen } from '../../actions/board';
 import run_decode from '../../utils/decode/decode-main';
-import { handleSubscribeDecodeChss } from '../../utils/api';
 import {
   disableDecodeChessButton,
-  showDecodeChessSpecialOfferSection,
 } from '../../utils/utils';
-import { IoIosClose } from 'react-icons/io';
 import Chess from 'chess.js';
 
 const mapStateToProps = (state) => {
@@ -16,7 +13,7 @@ const mapStateToProps = (state) => {
     fen: state.board.fen,
     pgn: state.board.pgn,
     nextMove: state.board.nextMove,
-    userFullInfo: state.cloud.userFullInfo,
+    plans: state.cloud.plans,
     allPgnArr: state.board.allPgnArr,
     activePgnTab: state.board.activePgnTab,
   };
@@ -26,23 +23,24 @@ const DecodeChess = (props) => {
   const {
     fen,
     nextMove,
-    userFullInfo,
+    plans,
     addPgnToArr,
     allPgnArr,
     activePgnTab,
     pgn,
     setFen,
+    explanationsContainer,
+    setExplanationsContainer,
   } = props;
-  const [explanationsContainer, setExplanationsContainer] = useState(false);
-  const [showSubscribeSrction, setShowSubscribeShow] = useState(true);
+  const [runDecode, setRunDecode] = useState(false);
 
   useEffect(() => {
     const box = document.getElementById('explanations-container');
-
     if (box.childNodes.length === 0) {
       setExplanationsContainer(false);
     } else {
       setExplanationsContainer(true);
+
     }
     window.setFenFromDecode = function (fen) {
       if (fen) {
@@ -69,19 +67,22 @@ const DecodeChess = (props) => {
         }
       }
     };
-  }, [userFullInfo]);
+  }, [plans]);
+
+  useEffect(()=>{
+    if(runDecode){
+      setExplanationsContainer(true);
+    }  
+  }, [runDecode])
 
   const handleDecodeRun = (e, fen, nexMove) => {
     e.stopPropagation();
-    run_decode(fen, nexMove);
+    setRunDecode(!runDecode);
+    run_decode(fen, nexMove); 
   };
 
-  const handleCloseSubscribeSection = () => {
-    setShowSubscribeShow(!showSubscribeSrction);
-  };
-
-  const showDecodeSectionHeadInfo = (userFullInfo) => {
-    const { decode_trial_passed, decode_chess } = userFullInfo;
+  const showDecodeSectionHeadInfo = (plans) => {
+    const { decode_trial_passed, decode_chess } = plans;
     if (decode_chess !== null) {
       return (
         <b>
@@ -111,15 +112,15 @@ const DecodeChess = (props) => {
   return (
     <>
       <Accordion defaultActiveKey={'0'} alwaysOpen>
-        <Accordion.Item eventKey="0" className="accordion-item">
+        <Accordion.Item eventKey="0" className="accordion-item mt--10 ml-3">
           <Accordion.Button className="accordion-button">
             <div className="decode-info-text-wrapper">
-              {showDecodeSectionHeadInfo(userFullInfo)}
+              {showDecodeSectionHeadInfo(plans)}
             </div>
             <div className="run-decode-button-wrapper">
               <button
                 id="run-decode-button"
-                disabled={disableDecodeChessButton(userFullInfo)}
+                disabled={disableDecodeChessButton(plans)}
                 onClick={(e) => handleDecodeRun(e, fen, nextMove)}
                 className="run-decode-button"
               >
@@ -133,7 +134,7 @@ const DecodeChess = (props) => {
           <Accordion.Body>
             <div
               className="mid-container"
-              style={{ display: explanationsContainer === true ? '' : 'none' }}
+              style={{ display: explanationsContainer ? '' : 'none' }}
             >
               <div className="explanation-area">
                 <div
@@ -142,32 +143,6 @@ const DecodeChess = (props) => {
                 ></div>
               </div>
             </div>
-            {showDecodeChessSpecialOfferSection(userFullInfo) && (
-              <div
-                className={
-                  showSubscribeSrction
-                    ? 'decodeChessSubscribtionInfo'
-                    : 'hide-decodeChessSubscribtionInfo'
-                }
-              >
-                <div className="d-flex flex-row justify-content-between float-right">
-                  <button
-                    className="modal-close-decode"
-                    type="button"
-                    onClick={handleCloseSubscribeSection}
-                  >
-                    <IoIosClose className="close-decode-subscribe" />
-                  </button>
-                </div>
-                <h6>
-                  Special offer to Chessify members: Unlock unlimited access for
-                  12 months, now at only $42 instead of $84
-                </h6>
-                <button onClick={handleSubscribeDecodeChss}>
-                  Add DecodeChess
-                </button>
-              </div>
-            )}
           </Accordion.Body>
         </Accordion.Item>
       </Accordion>

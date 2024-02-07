@@ -1,32 +1,35 @@
-import React, { useState, useRef, useEffect } from "react";
-import { imageConvert } from "upload-images-converter";
-import Chess from "chess.js";
-import { connect } from "react-redux";
-import { CLOUD_URL } from "../../constants/cloud-params";
-import { setFen, addPgnToArr, setEditMode } from "../../actions/board";
+import React, { useState, useRef, useEffect } from 'react';
+import { imageConvert } from 'upload-images-converter';
+import Chess from 'chess.js';
+import { connect } from 'react-redux';
+import { CLOUD_URL } from '../../constants/cloud-params';
+import { setFen, addPgnToArr, setEditMode } from '../../actions/board';
 
 const mapStateToProps = (state) => {
   return {
     fen: state.board.fen,
     pgnStr: state.board.pgnStr,
     pgn: state.board.pgn,
-    userFullInfo: state.cloud.userFullInfo,
+    userInfo: state.cloud.userInfo,
   };
 };
 
 const DropImage = ({
   pgn,
-  userFullInfo,
+  userInfo,
   addPgnToArr,
   setFen,
   setEditMode,
   setScannerImg,
   handleCloseModal,
+  isGuestUser,
+  setLoginModal,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef(null);
   const [scannerLoader, setScannerLoader] = useState(false);
   const [scannerError, setScannerError] = useState(false);
+  const [past, setPast] = useState(false);
 
   const chess = new Chess();
 
@@ -36,19 +39,25 @@ const DropImage = ({
 
   useEffect(() => {
     if (scannerError) {
-      document.addEventListener("click", outsideClickHandler);
+      document.addEventListener('click', outsideClickHandler);
       return () => {
-        document.removeEventListener("click", outsideClickHandler);
+        document.removeEventListener('click', outsideClickHandler);
       };
     }
   }, [scannerError]);
 
+  useEffect(() => {
+    if (past) {
+      pasteHandler(past);
+    }
+  }, [past]);
+
   const handleDrag = function (e) {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
+    if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true);
-    } else if (e.type === "dragleave") {
+    } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
   };
@@ -59,30 +68,34 @@ const DropImage = ({
     } else {
       let chessFen = chess.load(newFen);
       if (!chessFen) {
-        let fixedNewFen = newFen.slice(0, -1) + "1";
+        let fixedNewFen = newFen.slice(0, -1) + '1';
         chess.load(fixedNewFen);
+        addPgnToArr(chess.pgn(), {});
       }
-      addPgnToArr(chess.pgn(), {});
     }
     handleCloseModal();
   };
 
   const handleFiles = async (file) => {
-    let convertedFiles = await imageConvert(file, 400, 400, "image/jpeg", true);
+    if (isGuestUser) {
+      setLoginModal(true);
+      handleCloseModal();
+      return;
+    }
+    let convertedFiles = await imageConvert(file, 400, 400, 'image/jpeg', true);
     const url = `${CLOUD_URL}/fen`;
     let data = new FormData();
-    data.append("file", convertedFiles[0]);
-    data.append("token", userFullInfo.token);
-
+    data.append('file', convertedFiles[0]);
+    data.append('token', userInfo.token);
     const response = await fetch(url, {
-      method: "POST",
+      method: 'POST',
       body: data,
     });
     const respJson = await response.json();
 
     if (response.ok && respJson.fen) {
-      applyFenHandler(respJson.fen + " w - - 0 1");
-      window.LichessEditor.setFen(respJson.fen + " w - - 0 1");
+      applyFenHandler(respJson.fen + ' w - - 0 1');
+      window.LichessEditor.setFen(respJson.fen + ' w - - 0 1');
       setEditMode(true);
       setScannerImg(URL.createObjectURL(file[0]));
     } else {
@@ -113,10 +126,15 @@ const DropImage = ({
     inputRef.current.click();
   };
 
+  const pastClicked = (e) => {
+    setPast(e);
+  };
+
   const pasteHandler = (event) => {
+    event.stopPropagation();
     const clipboardItems = event.clipboardData.items;
     const items = [].slice.call(clipboardItems).filter(function (item) {
-      return item.type.indexOf("image") !== -1;
+      return item.type.indexOf('image') !== -1;
     });
     if (items.length === 0) {
       return;
@@ -132,13 +150,9 @@ const DropImage = ({
   };
 
   useEffect(() => {
-    const identifier = setTimeout(() => {
-      document.addEventListener("paste", pasteHandler, true);
-    }, 1000);
-
+    document.addEventListener('paste', pastClicked, true);
     return () => {
-      clearTimeout(identifier);
-      document.removeEventListener("paste", pasteHandler, true);
+      document.removeEventListener('paste', pastClicked, true);
     };
   });
 
@@ -158,7 +172,7 @@ const DropImage = ({
       <label
         id="label-file-upload"
         htmlFor="input-file-upload"
-        className={dragActive ? "drag-active" : ""}
+        className={dragActive ? 'drag-active' : ''}
       >
         <div className="d-flex flex-column justify-content-center">
           <p>Drag and drop your image here</p>

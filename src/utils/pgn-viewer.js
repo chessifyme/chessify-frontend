@@ -11,11 +11,42 @@ export const uuidv4 = () => {
   });
 };
 
+const modifyMoveComments = (mv) => {
+  const regex = /(\[%cal\s*.*\])/gm;
+  mv.comments.forEach((comment, indx) => {
+    if (comment.text && comment.text.length && comment.text.match(regex)) {
+      comment.text = comment.text.replace(/\n/g, ' ');
+      let commandMatches = comment.text.match(regex);
+      if (commandMatches && commandMatches.length) {
+        commandMatches.forEach((cMatch) => {
+          let valueStr = cMatch.split(' ')[1];
+          if (valueStr) {
+            valueStr.replace(']', '');
+            let values = valueStr.includes(',')
+              ? valueStr.split(',')
+              : [valueStr];
+
+            if (!mv.comments[indx].commands) mv.comments[indx].commands = [];
+            mv.comments[indx].commands.push({
+              key: 'cal',
+              values: values,
+            });
+          }
+        });
+      }
+    }
+  });
+};
+
 export const modifyMoves = (moves, layer = 0, parentMove = null) => {
   moves.forEach((mv, i) => {
     mv.layer = layer;
     mv.prev_move = i ? moves[i - 1] : parentMove;
     mv.move_id = uuidv4();
+
+    if (mv.comments && mv.comments.length) {
+      modifyMoveComments(mv);
+    }
 
     if (mv.ravs) {
       mv.ravs.forEach((rav) => {
@@ -202,21 +233,32 @@ const addMoveInPgnStringParts = (move, index, parts) => {
 const addCommentsInPgnStr = (move) => {
   let comments = '';
   if (move.comments && move.comments.length) {
-    move.comments.forEach(
-      (comment) => (comments = comments + ` {${comment.text}}`)
-    );
+    move.comments.forEach((comment) => {
+      if (comment.text) {
+        comments = comments + ` {${comment.text}}`;
+      }
+      if (comment.commands) {
+        comment.commands.forEach((command) => {
+          comments = comments + ` {[%${command.key} ${command.values}]}`;
+        });
+      }
+    });
   }
   return comments;
 };
 
 export const addCommentsInNotation = (move) => {
-  let comments = '';
+  let commentsStr = '';
   if (move.comments && move.comments.length) {
-    move.comments.forEach(
-      (comment) => (comments = comments + ` ${comment.text}`)
-    );
+    move.comments.forEach((comment) => {
+      if (comment.text && comment.text.includes('%eval')) {
+        commentsStr += comment.text.replace('%eval ', '') + ' ';
+      } else if (comment.text) {
+        commentsStr += comment.text + ' ';
+      }
+    });
   }
-  return comments;
+  return ' ' + commentsStr;
 };
 
 // Add score in the Notation section
@@ -274,9 +316,25 @@ export const getPgnHeader = (curHeader) => {
   return headerStr + '\n';
 };
 
+export const getPgnMainComments = (comments) => {
+  if (!comments) return '';
+  let commentText = '';
+  comments.forEach((comment) => {
+    if (comment.text) {
+      commentText += `{${comment.text}} `;
+    } else if (comment.commands) {
+      comment.commands.forEach((command) => {
+        commentText += `{[%${command.key} ${command.values.join()}]} `;
+      });
+    }
+  });
+  return commentText;
+};
+
 export const setPgnHeader = (header) => {
   const mainInfo = [
     'Event',
+    'EventDate',
     'Site',
     'Date',
     'Round',
@@ -294,18 +352,28 @@ export const setPgnHeader = (header) => {
     'ECO',
     'Opening',
     'Annotator',
+    'PlyCount',
+    'FEN',
+    'SourceTitle',
+    'WhiteTeam',
+    'BlackTeam',
+    'SetUp',
   ];
+  let hasProp = false;
   mainInfo.map((info) => {
     if (!header.hasOwnProperty(info)) {
       header[info] = '';
     } else {
       delete header[info];
+      hasProp = true;
     }
   });
+
   let headerStr = '';
   for (let head in header) {
     headerStr += `[${head} "${header[head]}"]\n`;
   }
+  headerStr += headerStr.length && !hasProp ? '\n' : '';
   return headerStr;
 };
 
@@ -325,13 +393,19 @@ export const addScorePGN = (payloadPGN, chess) => {
 };
 
 export const findRootVariations = (mv, rootVariations = []) => {
-  if (mv.layer === 0) {
+  if (mv.layer === 1 && !mv.prev_move) {
+    rootVariations.push('');
+    return rootVariations;
+  }
+
+  if (mv.layer === 0 || !mv.prev_move) {
     return rootVariations;
   }
 
   if (mv.layer !== mv.prev_move.layer) {
     rootVariations.push(mv.prev_move.move_id);
   }
+
   return findRootVariations(mv.prev_move, rootVariations);
 };
 
@@ -346,9 +420,22 @@ export const findIndexedPath = (pgn, rootVariations, indexedPath = []) => {
       holder.ravInd = indx;
       holder.moveInd = rootVariations.length !== 1 ? index + 1 : index;
       indexedPath.push(holder);
-      if (rootVariations.length !== 1 && moves[index + 1]) {
+      if (
+        rootVariations.length !== 1 &&
+        moves[index + 1] &&
+        moves[index + 1].ravs
+      ) {
         return findIndexedPath(
           moves[index + 1].ravs,
+          rootVariations.slice(1),
+          indexedPath
+        );
+      }
+    } else if (rootVariations[0].length === 0 && indx === 0) {
+      indexedPath.push({ ravInd: 0, moveInd: 0 });
+      if (rootVariations.length !== 1 && moves[0] && moves[0].ravs) {
+        return findIndexedPath(
+          moves[0].ravs,
           rootVariations.slice(1),
           indexedPath
         );
@@ -392,6 +479,7 @@ const promoteMove = (nextPgn, lastMove, prelastMove) => {
   // in case we are promoting a black move, we need to remove its move number.
   if (
     promotingMV1st.move_number &&
+    promotingMV1st.prev_move &&
     promotingMV1st.prev_move.move_number &&
     notWhitePromo
   ) {
@@ -455,6 +543,17 @@ export const deleteRemainingMV = (pgn, indexedPath) => {
   if (indexedPath.length === 1 && isFirstLayer) {
     const hasNextMove = pgn.moves[moveInd + 1];
     if (hasNextMove) {
+      const lastIndx = pgn.moves.length - 1;
+      const lastMoveComment =
+        pgn.moves[lastIndx].comments &&
+        pgn.moves[lastIndx].comments[0] &&
+        pgn.moves[lastIndx].comments[0].text;
+      const regex = /((0-1)|(1-0)|(½-½))\s\([0-9]+\)\s.*\s\([0-9]+\)-.*\s\([0-9]+\)/gm;
+      if (lastMoveComment && lastMoveComment.match(regex)) {
+        pgn.moves[moveInd].comments.push({
+          text: lastMoveComment,
+        });
+      }
       pgn.moves.splice(moveInd + 1);
     }
     return;
@@ -469,6 +568,17 @@ export const deleteRemainingMV = (pgn, indexedPath) => {
   } else {
     const hasNextMove = pgn.ravs[ravInd].moves[moveInd + 1];
     if (hasNextMove) {
+      const lastIndx = pgn.ravs[ravInd].moves.length - 1;
+      const lastMoveComment =
+        pgn.ravs[ravInd].moves[lastIndx].comments &&
+        pgn.ravs[ravInd].moves[lastIndx].comments[0] &&
+        pgn.ravs[ravInd].moves[lastIndx].comments[0].text;
+      const regex = /((0-1)|(1-0)|(½-½))\s\([0-9]+\)\s.*\s\([0-9]+\)-.*\s\([0-9]+\)/gm;
+      if (lastMoveComment && lastMoveComment.match(regex)) {
+        pgn.ravs[ravInd].moves[moveInd].comments.push({
+          text: lastMoveComment,
+        });
+      }
       pgn.ravs[ravInd].moves.splice(moveInd + 1);
     }
   }
@@ -586,6 +696,14 @@ export const convertNagsToSymbols = (move) => {
       case '$23':
         convertedNags.push('\u2A00');
         break;
+      case '$40':
+      case '$41':
+        convertedNags.push('\u2192');
+        break;
+      case '$36':
+      case '$37':
+        convertedNags.push('\u2191');
+        break;
       case '$7':
         convertedNags.push('\u25A1');
         break;
@@ -607,7 +725,7 @@ export const convertNagsToSymbols = (move) => {
         break;
     }
   });
-  return convertedNags.join(' ');
+  return ' ' + convertedNags.join(' ');
 };
 
 export const addNagInMove = (move, nag) => {
@@ -628,6 +746,10 @@ export const addNagInMove = (move, nag) => {
     '$15',
     '$44',
     '$45',
+    '$40',
+    '$41',
+    '$36',
+    '$37',
   ];
 
   const isNewValueNag = valueNag.includes(nag);
@@ -735,13 +857,23 @@ export const deleteMvNag = (pgn, indexedPath) => {
   }
 };
 
-export const addCommentToMV = (pgn, indexedPath, comment) => {
+export const addCommentToMV = (pgn, indexedPath, comment, commentIndx) => {
   const { ravInd, moveInd } = indexedPath[0];
   const isFirstLayer = pgn.moves && pgn.moves[moveInd].layer === 0;
 
   if (indexedPath.length === 1 && isFirstLayer) {
-    const commentObj = { text: comment };
-    pgn.moves[moveInd].comments.push(commentObj);
+    if (commentIndx === null) {
+      const commentObj = { text: comment };
+      pgn.moves[moveInd].comments.push(commentObj);
+    } else {
+      if (comment.length) {
+        const commentObj = { text: comment };
+        pgn.moves[moveInd].comments[commentIndx] = commentObj;
+      } else {
+        pgn.moves[moveInd].comments.splice(commentIndx, 1);
+      }
+    }
+
     return;
   }
 
@@ -750,19 +882,77 @@ export const addCommentToMV = (pgn, indexedPath, comment) => {
       ? pgn.moves[moveInd]
       : pgn.ravs[ravInd].moves[moveInd];
     indexedPath = indexedPath.slice(1);
-    return addCommentToMV(nextPgn, indexedPath, comment);
+    return addCommentToMV(nextPgn, indexedPath, comment, commentIndx);
   } else {
-    const commentObj = { text: comment };
-    pgn.ravs[ravInd].moves[moveInd].comments.push(commentObj);
+    if (commentIndx === null) {
+      const commentObj = { text: comment };
+      pgn.ravs[ravInd].moves[moveInd].comments.push(commentObj);
+    } else {
+      if (comment.length) {
+        const commentObj = { text: comment };
+        pgn.ravs[ravInd].moves[moveInd].comments[commentIndx] = commentObj;
+      } else {
+        pgn.ravs[ravInd].moves[moveInd].comments.splice(commentIndx, 1);
+      }
+    }
+    return;
   }
 };
 
-const findNextMoveRec = (pgn, indexedPath) => {
+export const addCommandActiveMove = (comments, command, activeMove) => {
+  let commandIndx = null;
+  comments.forEach((pgnComment, index) => {
+    if (pgnComment.commands) {
+      commandIndx = index;
+    }
+  });
+
+  if (commandIndx === null) {
+    comments.push({
+      commands: [command],
+    });
+    return activeMove;
+  }
+  let commandExists = false;
+
+  comments[commandIndx].commands.forEach((pgnCommand, indx) => {
+    if (pgnCommand.key === command.key) {
+      const text = command.values[0].substring(1);
+      const index = pgnCommand.values.findIndex((val) => val.includes(text));
+      if (index == -1) {
+        pgnCommand.values = [...pgnCommand.values, ...command.values];
+      } else {
+        if (command.values[0][0] === pgnCommand.values[index][0]) {
+          pgnCommand.values.splice(index, 1);
+        } else {
+          pgnCommand.values.splice(index, 1);
+          pgnCommand.values = [...pgnCommand.values, ...command.values];
+        }
+
+        if (!pgnCommand.values.length) {
+          delete comments[commandIndx].commands[indx];
+        }
+      }
+      commandExists = true;
+    }
+  });
+  if (!commandExists) {
+    comments[commandIndx].commands.push(command);
+  }
+  return activeMove;
+};
+
+export const addCommandToMV = (pgn, indexedPath, command) => {
   const { ravInd, moveInd } = indexedPath[0];
   const isFirstLayer = pgn.moves && pgn.moves[moveInd].layer === 0;
 
   if (indexedPath.length === 1 && isFirstLayer) {
-    return pgn.moves[moveInd + 1];
+    addCommandActiveMove(
+      pgn.moves[moveInd].comments,
+      command,
+      pgn.moves[moveInd]
+    );
+    return;
   }
 
   if (indexedPath.length > 1) {
@@ -770,9 +960,35 @@ const findNextMoveRec = (pgn, indexedPath) => {
       ? pgn.moves[moveInd]
       : pgn.ravs[ravInd].moves[moveInd];
     indexedPath = indexedPath.slice(1);
-    return findNextMoveRec(nextPgn, indexedPath);
+    return addCommandToMV(nextPgn, indexedPath, command);
   } else {
-    return pgn.ravs[ravInd].moves[moveInd + 1];
+    addCommandActiveMove(
+      pgn.ravs[ravInd].moves[moveInd].comments,
+      command,
+      pgn.ravs[ravInd].moves[moveInd]
+    );
+    return;
+  }
+};
+
+export const findMove = (pgn, indexedPath, nextMove) => {
+  const { ravInd, moveInd } = indexedPath[0];
+  const isFirstLayer = pgn.moves && pgn.moves[moveInd].layer === 0;
+
+  if (indexedPath.length === 1 && isFirstLayer) {
+    return nextMove ? pgn.moves[moveInd + 1] : pgn.moves[moveInd];
+  }
+
+  if (indexedPath.length > 1) {
+    let nextPgn = isFirstLayer
+      ? pgn.moves[moveInd]
+      : pgn.ravs[ravInd].moves[moveInd];
+    indexedPath = indexedPath.slice(1);
+    return findMove(nextPgn, indexedPath);
+  } else {
+    return nextMove
+      ? pgn.ravs[ravInd].moves[moveInd + 1]
+      : pgn.ravs[ravInd].moves[moveInd];
   }
 };
 
@@ -786,8 +1002,12 @@ export const findNextMove = (move, pgn) => {
   ) {
     return;
   }
+
   const indexedPath = findIndexedPath([pgn], rootVariations);
-  const nextMove = findNextMoveRec(pgn, indexedPath);
+
+  if (!indexedPath.length) return null;
+
+  const nextMove = findMove(pgn, indexedPath, true);
   return nextMove;
 };
 
@@ -836,6 +1056,8 @@ export const formatMoveNumber = (move) => {
     move.prev_move.ravs &&
     move.prev_move.move_number
   ) {
+    if (move.prev_move.prev_move && move.prev_move.prev_move.move_number)
+      return moveNumber;
     moveNumber = (moveNumber + '').trimEnd() + '.. ';
   }
 
@@ -912,6 +1134,13 @@ export const getReferencesUrl = (fen, searchParams, urlFunc) => {
     url += `&ignore_color=${searchParams.ignoreColor}`;
   }
 
+  if (
+    searchParams.ignoreBlitzRapid === true ||
+    searchParams.ignoreBlitzRapid === false
+  ) {
+    url += `&ignore_blitz_rapid=${searchParams.ignoreBlitzRapid}`;
+  }
+
   if (searchParams.resultWins === true || searchParams.resultWins === false) {
     url += `&wins=${searchParams.resultWins}`;
   }
@@ -959,7 +1188,7 @@ export const convertResult = (result) => {
   } else if (result === '0') {
     return '0-1';
   } else if (result === '1/2') {
-    return ' ½- ½';
+    return '½-½';
   }
 };
 
@@ -1002,6 +1231,7 @@ export const modifySearchParam = (searchParams, param) => {
   }
   if (
     param !== 'ignoreColor' &&
+    param !== 'ignoreBlitzRapid' &&
     param !== 'resultWins' &&
     param !== 'resultDraws' &&
     param !== 'resultLosses' &&
@@ -1020,6 +1250,9 @@ export const modifySearchParam = (searchParams, param) => {
     }
     if (param === 'ignoreColor' && searchParams[param]) {
       return 'Ignore Color';
+    }
+    if (param === 'ignoreBlitzRapid' && searchParams[param]) {
+      return 'Ignore Blitz and Rapid';
     }
   }
 };
@@ -1056,6 +1289,8 @@ export const addScoreToPgnStr = (pgnStr) => {
 };
 
 export const fixPgnStrCommentPosition = (pgn) => {
+  if (!pgn.length) return pgn;
+
   const regex = /(\(|\))\s?(?<comment>\{([^}]*)})\s?(?<move>([0-9]+\.{1,3}\s)?([^\s|^\)]*(\s?\$[0-9]+){0,2}))/gm;
   let m;
   do {
@@ -1076,6 +1311,89 @@ export const modifyAllPgnArr = (allPgnArr) => {
     tabElem.tabActiveMove = {};
     tabElem.tabFile = {};
   });
+};
+
+const addRavMoveFromFullAnalysis = (move, moveAnalyse) => {
+  const bestMove = moveAnalyse.pgn[0];
+  if (!bestMove.length) return move;
+
+  move.ravs = move.ravs && move.ravs.length ? move.ravs : [];
+  let mv = {
+    comments: [{ text: 'was best' }],
+    layer: 1,
+    move: bestMove,
+    move_id: uuidv4(),
+    prev_move: move.prev_move,
+  };
+  if (move.move_number) mv.move_number = move.move_number;
+  move.ravs.push({ moves: [mv], result: null });
+  return move;
+};
+
+export const applyFullAnalysisResult = (pgn, analysisResult) => {
+  const moves = pgn.moves;
+  analysisResult.forEach((result, index) => {
+    let move = moves[index];
+    if (result.type === 'blunder' && (!move.type || move.type !== 'blunder')) {
+      move.nags = move.nags ? move.nags : [];
+      move.nags[0] = '$4';
+      move.comments.push({ text: 'Blunder' });
+      move.type = 'blunder';
+      move = addRavMoveFromFullAnalysis(move, analysisResult[index - 1]);
+    } else if (
+      result.type === 'mistake' &&
+      (!move.type || move.type !== 'mistake')
+    ) {
+      move.nags = move.nags ? move.nags : [];
+      move.nags[0] = '$2';
+      move.comments.push({ text: 'Mistake' });
+      move.type = 'mistake';
+      move = addRavMoveFromFullAnalysis(move, analysisResult[index - 1]);
+    } else if (
+      result.type === 'inaccuracy' &&
+      (!move.type || move.type !== 'inaccuracy')
+    ) {
+      move.nags = move.nags ? move.nags : [];
+      move.nags[0] = '$6';
+      move.comments.push({ text: 'Inaccuracy' });
+      move.type = 'inaccuracy';
+      move = addRavMoveFromFullAnalysis(move, analysisResult[index - 1]);
+    }
+    if (!move.comments.some((e) => e.text === `%eval ${result.score}`)) {
+      move.comments.push({ text: `%eval ${result.score}` });
+    }
+  });
+  return pgn;
+};
+
+export const findLinkTabIndex = (url) => {
+  const tabs = [
+    'notation',
+    'chess-database',
+    'lichess-database',
+    'cloud-storage',
+    'video-search',
+    'chess-pdf-scanner',
+  ];
+  let foundTab = 0;
+  tabs.forEach((tab, index) => {
+    if (url.includes('/' + tab)) {
+      foundTab = index;
+    }
+  });
+  return foundTab;
+};
+
+export const getLinkFromIndex = (index) => {
+  const tabs = [
+    'notation',
+    'chess-database',
+    'lichess-database',
+    'cloud-storage',
+    'video-search',
+    'chess-pdf-scanner',
+  ];
+  return '/analysis' + (index ? '/' + tabs[index] : '');
 };
 
 export default {
@@ -1114,4 +1432,5 @@ export default {
   fixPgnStrCommentPosition,
   getLinePgn,
   modifyAllPgnArr,
+  applyFullAnalysisResult,
 };

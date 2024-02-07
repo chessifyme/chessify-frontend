@@ -1,6 +1,12 @@
 import React, { useEffect } from 'react';
 import { connect } from 'react-redux';
+import Table from 'react-bootstrap/Table';
+import { RiDeleteBinFill } from 'react-icons/ri';
+import { MdOutlineDriveFileRenameOutline } from 'react-icons/md';
 import { setCurrentDirectory, setTourNextStep } from '../../actions/board';
+import useKeyPress from './KeyPress';
+
+const FOLDER_STYLE = require('../../../public/assets/images/pgn-viewer/folder-style.svg');
 
 const mapStateToProps = (state) => {
   return {
@@ -20,7 +26,12 @@ const UploadedDirs = ({
   tourStepNumber,
   tourType,
   setTourNextStep,
+  setDeleteModal,
+  setEditFolder,
+  sortByName,
 }) => {
+  const enterPressed = useKeyPress(13);
+
   const openFolderHandler = (event, folder) => {
     if (event.ctrlKey || event.metakey) {
       if (selectedFiles.includes(folder)) {
@@ -45,6 +56,41 @@ const UploadedDirs = ({
     setSelectedFiles([folder]);
   };
 
+  useEffect(() => {
+    if (!enterPressed && selectedFiles.length === 1) {
+      setCurrentDirectory(selectedFiles[0]);
+      setSelectedFiles([]);
+      return;
+    }
+  }, [enterPressed]);
+
+  let userUploadedFilesCurr = userUploadedFiles;
+
+  if (sortByName) {
+    let collator = new Intl.Collator(undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    userUploadedFilesCurr = Object.keys(userUploadedFiles)
+      .sort(function (a, b) {
+        let x = a.toLowerCase();
+        let y = b.toLowerCase();
+
+        if (x > y) {
+          return 1;
+        }
+        if (x < y) {
+          return -1;
+        }
+        return 0;
+      })
+      .sort(collator.compare)
+      .reduce((obj, key) => {
+        obj[key] = userUploadedFiles[key];
+        return obj;
+      }, {});
+  }
+
   return (
     <>
       {loader === 'folderLoader' ? (
@@ -61,34 +107,56 @@ const UploadedDirs = ({
       ) : (
         <></>
       )}
-      <div id='folderContainer' className="folders-container">
-        {loader !== 'folderLoader' && userUploadedFiles ? (
-          Object.keys(userUploadedFiles).map((folder, index) => {
-            return (
-              <button
-                key={folder + Math.random()}
-                className="folder-btn directory"
-                onClick={(event) => openFolderHandler(event, folder)}
-              >
-                <span className="directory d-flex flex-column">
-                  <img
-                    className={`directory ${
-                      selectedFiles.includes(folder) ? 'active-folder' : ''
+      <Table className="folders-container" hover>
+        <tbody className="container-folder-body">
+          {loader !== 'folderLoader' && userUploadedFilesCurr ? (
+            Object.keys(userUploadedFilesCurr).map((folder, index) => {
+              if(tourType === 'analyze' && tourStepNumber === 2){
+                 setTourNextStep();
+                 }
+              return (
+                <tr
+                  key={folder + Math.random()}
+                  onClick={(event) => openFolderHandler(event, folder)}
+                >
+                  <td
+                    className={`folder-btn ${
+                      selectedFiles.includes(folder) ? 'active-folder-span' : ''
                     }`}
-                    src={require('../../../public/assets/images/pgn-viewer/folder-style.svg')}
-                    width={72}
-                    height={72}
-                    alt=""
-                  />
-                  <span className="directory">{folder}</span>
-                </span>
-              </button>
-            );
-          })
-        ) : (
-          <></>
-        )}
-      </div>
+                  >
+                    <div id="folderContainer">
+                      <span>{index + 1}.</span>
+                      <img src={FOLDER_STYLE} width={25} alt="" />
+                      <span>{folder}</span>
+                    </div>
+                    <div className="right-section">
+                      <span>{userUploadedFilesCurr[folder].length} files</span>
+                      <MdOutlineDriveFileRenameOutline
+                        className="upload-nav-icon directory"
+                        title="Rename Folder"
+                        onClick={() => {
+                          setSelectedFiles([folder]);
+                          setEditFolder(true);
+                        }}
+                      />
+                      <RiDeleteBinFill
+                        className="upload-nav-icon directory"
+                        onClick={() => {
+                          setSelectedFiles([folder]);
+                          setDeleteModal(true);
+                        }}
+                        title="Delete Folder"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          ) : (
+            <></>
+          )}
+        </tbody>
+      </Table>
     </>
   );
 };

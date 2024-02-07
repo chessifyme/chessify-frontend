@@ -33,6 +33,7 @@
 
     @media #{$sm-layout} {
       padding: 6px 20px 6px 13px;
+      font-size: 12px;
     }
   }
 }
@@ -59,8 +60,8 @@
 }
 
 .engine-name-wrapper {
-  margin: auto 0px;
-  font-size: 1rem;
+  margin: auto 3px auto 0;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-color);
 }

@@ -93,7 +93,7 @@ UL > LI > .path {
     height: 11px;
     margin: 0 6px;
     content: "";
-    background: url(../images/board/pieces/open-btn-norm.svg) no-repeat 50% 50%;
+    background: url(../images/board/symbols/open-btn-norm.svg) no-repeat 50% 50%;
     transition: all .2s;
 }
 
@@ -289,11 +289,15 @@ UL > LI > .path {
     text-align: center;
     padding-top: 5px;
     margin-bottom: 20px;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    border-radius: 6px;
 }
 
 .decodeChessSubscribtionInfo>h6 {
     font-size: 12px;
     margin: 5px 0px 10px 0px !important;
+    color: var(--text-color);
 }
 
 .decodeChessSubscribtionInfo>button {
@@ -302,7 +306,7 @@ UL > LI > .path {
     border: none;
     color: #ffffff;
     padding: 8px 12px;
-    margin-bottom: 5px;
+    margin-bottom: 10px;
     font-weight: bold;
     font-size: 12px;
 }

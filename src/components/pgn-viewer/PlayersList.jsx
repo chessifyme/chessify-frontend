@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   setReference,
-  setGameRefLoader,
   setMoveLoader,
   setGameReference,
   setTourNextStep,
@@ -24,12 +23,12 @@ const PlayersList = (props) => {
     setReference,
     fen,
     searchParams,
-    setGameRefLoader,
     setMoveLoader,
     setGameReference,
     tourStepNumber,
     tourType,
     setTourNextStep,
+    setMobileViewModal,
   } = props;
   const handlePlayerSearch = (player) => {
     setPlayerSearchInput(player);
@@ -41,6 +40,7 @@ const PlayersList = (props) => {
       whiteElo: searchParams.whiteElo,
       blackElo: searchParams.blackElo,
       ignoreColor: true,
+      ignoreBlitzRapid: false,
       resultWins: searchParams.resultWins,
       resultDraws: searchParams.resultDraws,
       resultLosses: searchParams.resultLosses,
@@ -48,13 +48,13 @@ const PlayersList = (props) => {
       dateMax: searchParams.dateMax,
     };
     setMoveLoader();
-    setGameRefLoader();
     setReference(fen, newSearchParams);
     setGameReference(false, newSearchParams);
     setPlayerSearchInput('');
     if (tourType === 'prepare' && tourStepNumber === 1) {
       setTourNextStep();
     }
+    setMobileViewModal(false);
   };
   return (
     <ul className="player-suggestions">
@@ -76,7 +76,6 @@ const PlayersList = (props) => {
 
 export default connect(mapStateToProps, {
   setReference,
-  setGameRefLoader,
   setMoveLoader,
   setGameReference,
   setTourNextStep,

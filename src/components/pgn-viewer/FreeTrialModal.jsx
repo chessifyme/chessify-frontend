@@ -67,16 +67,8 @@ const FreeTrialModal = ({ showModal, setShowModal, setSubModal }) => {
             information.
           </h5>
         </div>
-        <img
-          src={require('../../../public/assets/images/pgn-viewer/discount.svg')}
-          width="140"
-          height="80"
-          alt=""
-          className="discount-50 discount-50-trial"
-        />
         <div className="extend-trial-info">
-          <h5>Save 50% for the next 3 months</h5>
-          <h6>Pay $3.99/month afterward. No risk: Cancel any time.</h6>
+          <h6>Pay $7.99/month afterward. No risk: Cancel any time.</h6>
           <div className="info d-flex flex-row">
             <div>
               <img

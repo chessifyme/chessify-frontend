@@ -2,7 +2,7 @@ import BOARD_ACTION_TYPES from '../constants/board-action-types';
 import BOARD_PARAMS from '../constants/board-params';
 
 const initialState = {
-  fen: BOARD_PARAMS.INITIAL_FEN,
+  fen: BOARD_PARAMS.INITIAL_FEN_URL,
   pgnStr: ' *',
   pgn: {},
   activeMove: {},
@@ -11,7 +11,6 @@ const initialState = {
   searchParams: {},
   referenceGames: {},
   moveLoader: false,
-  gameRefLoader: false,
   variationOpt: false,
   pageNum: 0,
   activeFileInfo: {},
@@ -39,6 +38,14 @@ const initialState = {
   activePgnTab: 0,
   analyzingFenTabIndx: null,
   switchedTabAnalyzeFen: '',
+  lichessDB: {},
+  searchParamsLichess: BOARD_PARAMS.LICHESS_DB_PARAMS,
+  searchParamsLichessPlayer: BOARD_PARAMS.LICHESS_DB_PLAYER_PARAMS,
+  chessAIResponse: {},
+  navigationGames: {},
+  navigationGameIndx: -1,
+  navigationPages: [0, 1],
+  navigationGamesTabs: [],
 };
 
 function boardReducer(state = initialState, action) {
@@ -47,8 +54,8 @@ function boardReducer(state = initialState, action) {
       return {
         ...state,
         pgnStr: action.payload.pgnStr,
-        pgn: action.payload.pgn,
         fen: action.payload.fen,
+        pgn: action.payload.pgn,
       };
     }
     case BOARD_ACTION_TYPES.SET_INITIAL_PGN: {
@@ -162,6 +169,21 @@ function boardReducer(state = initialState, action) {
         pgn: { ...action.payload.pgn },
       };
     }
+    case BOARD_ACTION_TYPES.ADD_COMMAND_TO_MOVE: {
+      return {
+        ...state,
+        pgnStr: action.payload.pgnStr,
+        pgn: { ...action.payload.pgn },
+        activeMove: action.payload.activeMove,
+      };
+    }
+    case BOARD_ACTION_TYPES.ADD_COMMAND_TO_HEADER: {
+      return {
+        ...state,
+        pgnStr: action.payload.pgnStr,
+        pgn: { ...action.payload.pgn },
+      };
+    }
     case BOARD_ACTION_TYPES.SET_REFERENCE: {
       return {
         ...state,
@@ -173,7 +195,7 @@ function boardReducer(state = initialState, action) {
       return {
         ...state,
         referenceGames: { ...action.payload.referenceGames },
-        gameRefLoader: action.payload.gameRefLoader,
+        loader: '',
         searchParams: { ...action.payload.searchParams },
         pageNum: action.payload.pageNum,
       };
@@ -182,12 +204,6 @@ function boardReducer(state = initialState, action) {
       return {
         ...state,
         moveLoader: action.payload.moveLoader,
-      };
-    }
-    case BOARD_ACTION_TYPES.SET_GAME_REF_LOADER: {
-      return {
-        ...state,
-        gameRefLoader: action.payload.gameRefLoader,
       };
     }
     case BOARD_ACTION_TYPES.SET_VARIATION_OPT: {
@@ -230,12 +246,9 @@ function boardReducer(state = initialState, action) {
         loader: action.payload.loader,
       };
     }
-    case BOARD_ACTION_TYPES.CREATE_FOLDER: {
-      return {
-        ...state,
-        userUploads: {},
-      };
-    }
+    case BOARD_ACTION_TYPES.CREATE_FOLDER:
+    case BOARD_ACTION_TYPES.EDIT_FOLDER_NAME:
+    case BOARD_ACTION_TYPES.EDIT_FILE_NAME:
     case BOARD_ACTION_TYPES.DELETE_FILES: {
       return {
         ...state,
@@ -318,6 +331,7 @@ function boardReducer(state = initialState, action) {
         allPgnArr: action.payload.allPgnArr,
         activePgnTab: action.payload.activePgnTab,
         analyzingFenTabIndx: action.payload.analyzingFenTabIndx,
+        navigationGamesTabs: action.payload.navigationGamesTabs,
       };
     }
 
@@ -357,6 +371,48 @@ function boardReducer(state = initialState, action) {
         switchedTabAnalyzeFen: action.payload.switchedTabAnalyzeFen,
         analyzingFenTabIndx: action.payload.analyzingFenTabIndx,
         fen: action.payload.fen,
+      };
+    }
+
+    case BOARD_ACTION_TYPES.APPLY_FULL_ANALYSIS_ON_PGN: {
+      return {
+        ...state,
+        pgn: action.payload.pgn,
+        activeMove: {},
+        pgnStr: action.payload.pgnStr,
+      };
+    }
+
+    case BOARD_ACTION_TYPES.SET_SWITCHED_TAB_ANALYZING_FEN: {
+      return {
+        ...state,
+        switchedTabAnalyzeFen: action.payload.analyzingFen,
+      };
+    }
+
+    case BOARD_ACTION_TYPES.SET_LICHESS_DB: {
+      return {
+        ...state,
+        lichessDB: action.payload.lichessDB,
+        searchParamsLichess: action.payload.searchParamsLichess,
+        searchParamsLichessPlayer: action.payload.searchParamsLichessPlayer,
+      };
+    }
+
+    case BOARD_ACTION_TYPES.SET_CHESS_AI_RESPONSE: {
+      return {
+        ...state,
+        chessAIResponse: action.payload.chessAIResponse,
+      };
+    }
+
+    case BOARD_ACTION_TYPES.SET_NAV_GAMES_INFO: {
+      return {
+        ...state,
+        navigationGames: action.payload.navigationGames,
+        navigationGameIndx: action.payload.navigationGameIndx,
+        navigationPages: action.payload.navigationPages,
+        navigationGamesTabs: action.payload.navigationGamesTabs,
       };
     }
 

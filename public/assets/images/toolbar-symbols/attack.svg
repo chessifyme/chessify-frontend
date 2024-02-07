@@ -1,0 +1,11 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 24" width="25" height="24">
+	<title>initative-svg</title>
+	<style>
+		.s0 { fill: none } 
+		.s1 { fill: none;stroke: #959d99;stroke-linecap: round;stroke-linejoin: round } 
+		.s2 { fill: none;stroke: #959d99;stroke-linecap: round } 
+	</style>
+	<path id="Layer" class="s0" d="m24.9 0v24h-24v-24z"/>
+	<path id="Layer" fill-rule="evenodd" class="s1" d="m14.6 10l2 2-2 2"/>
+	<path id="Layer" fill-rule="evenodd" class="s2" d="m16.1 12h-7"/>
+</svg>

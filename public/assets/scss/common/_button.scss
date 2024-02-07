@@ -9,7 +9,7 @@ button {
     border: 1px solid #e0ece7;
     border-radius: 8px;
     width: fit-content;
-    padding: 0 10px 0 5px;
+    padding: 3px 10px;
     height: 32px;
     color: var(--text-color);
     font-weight: 600;
@@ -22,7 +22,6 @@ button {
     }
   }
   &.done-editor-btn {
-    margin-left: -5px;
     margin-top: -5px;
     width: 200px;
     height: 40px;

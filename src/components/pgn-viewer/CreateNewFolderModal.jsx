@@ -11,9 +11,11 @@ import {
 
 const mapStateToProps = (state) => {
   return {
-    userFullInfo: state.cloud.userFullInfo,
+    userInfo: state.cloud.userInfo,
     tourStepNumber: state.board.tourStepNumber,
     tourType: state.board.tourType,
+    userUploads: state.board.userUploads,
+    isGuestUser: state.cloud.isGuestUser,
   };
 };
 
@@ -22,15 +24,19 @@ const CreateNewFolderModal = ({
   setIsOpen,
   setLoader,
   createFolder,
-  userFullInfo,
+  userInfo,
   tourType,
   tourStepNumber,
   setTourNextStep,
   setTourType,
   setTourNumber,
+  userUploads,
+  isGuestUser,
+  setLoginModal,
 }) => {
   const [folderName, setFolderName] = useState('');
   const [createFolderLoader, setCreateFolderLoader] = useState(false);
+  const [folderNameError, setFolderNameError] = useState('');
 
   useEffect(() => {
     if (isOpen && tourType === 'analyze' && tourStepNumber === 1) {
@@ -42,13 +48,31 @@ const CreateNewFolderModal = ({
     setFolderName('');
     setIsOpen(false);
     setCreateFolderLoader(false);
+    setFolderNameError('');
   };
 
   const createFolderHandler = () => {
+    if (isGuestUser) {
+      setLoginModal(true);
+      setIsOpen(false);
+      return;
+    }
+    if (!folderName.length) {
+      setFolderNameError('Folder name cannot be empty.');
+      return;
+    } else if (Object.keys(userUploads).includes(folderName)) {
+      setFolderNameError('The folder name already exists.');
+      return;
+    }
     setCreateFolderLoader(true);
     setLoader('folderLoader');
-    createFolder('/', folderName, userFullInfo);
+    closeModalHandler();
+    createFolder('/', folderName, userInfo);
   };
+
+  useEffect(() => {
+    setFolderNameError('');
+  }, [folderName]);
 
   return (
     <Modal
@@ -99,6 +123,13 @@ const CreateNewFolderModal = ({
                 autoFocus
                 onChange={(e) => setFolderName(e.target.value)}
               />
+              {folderNameError.length ? (
+                <div className="error-message" style={{ color: '#c33' }}>
+                  {folderNameError}
+                </div>
+              ) : (
+                <></>
+              )}
             </div>
             <div className="d-flex flex-row justify-content-between">
               <Button
@@ -114,7 +145,11 @@ const CreateNewFolderModal = ({
               >
                 Cancel
               </Button>
-              <Button className="apply-btn create-new-folder" variant="primary" type="submit">
+              <Button
+                className="apply-btn create-new-folder"
+                variant="primary"
+                type="submit"
+              >
                 {createFolderLoader ? (
                   <div className="circle-loader"></div>
                 ) : (

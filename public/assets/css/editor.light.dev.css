@@ -401,7 +401,7 @@ cg-resize {
 }
 
 .board-editor .spare .no-square.pointer piece {
-  background-image: url('../images/board/boards/pointer.svg');
+  background-image: url('../images/board/symbols/pointer.svg');
 }
 
 .board-editor .spare .no-square.trash:hover {
@@ -413,7 +413,7 @@ cg-resize {
 }
 
 .board-editor .spare .no-square.trash piece {
-  background-image: url('../images/board/boards/trash.svg');
+  background-image: url('../images/board/symbols/trash.svg');
 }
 
 .is3d .board-editor .spare .no-square div {

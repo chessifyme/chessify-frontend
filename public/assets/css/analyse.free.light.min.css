@@ -2653,27 +2653,27 @@ body {
 }
 
 .material mpiece.pawn {
-    background-image: url(../images/board/pieces/P.svg)
+    background-image: url(../images/board/pieces/promotion_pieces/P.svg)
 }
 
 .material mpiece.bishop {
-    background-image: url(../images/board/pieces/B.svg)
+    background-image: url(../images/board/pieces/promotion_pieces/B.svg)
 }
 
 .material mpiece.knight {
-    background-image: url(../images/board/pieces/N.svg)
+    background-image: url(../images/board/pieces/promotion_pieces/N.svg)
 }
 
 .material mpiece.rook {
-    background-image: url(../images/board/pieces/R.svg)
+    background-image: url(../images/board/pieces/promotion_pieces/R.svg)
 }
 
 .material mpiece.queen {
-    background-image: url(../images/board/pieces/Q.svg)
+    background-image: url(../images/board/pieces/promotion_pieces/Q.svg)
 }
 
 .material mpiece.king {
-    background-image: url(../images/board/pieces/K.svg)
+    background-image: url(../images/board/pieces/promotion_pieces/K.svg)
 }
 
 .material score {
